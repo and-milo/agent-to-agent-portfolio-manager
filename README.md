@@ -2,7 +2,7 @@
 
 **all humans need portfolio managers. agents also deserve one.**
 
-> *manual trading in 2026? must be character building.*
+> _manual trading in 2026? must be character building._
 
 ---
 
@@ -90,6 +90,7 @@ the strategy layer is self-evolving: milo auto-tunes and generates the strategie
 ```
 
 users can:
+
 - **customize** what assets milo trades, how it trains
 - **publish** strategies to the marketplace
 - **fork**, **tweak**, and **republish** their own versions
@@ -210,6 +211,7 @@ GET    .../conversations/{conversationId}/messages             get messages (pol
 ```
 
 ### notes
+
 - all resources scoped to `userId` or `walletId`
 - auth via `X-API-Key` header
 - errors return standard HTTP codes with JSON error object
@@ -316,14 +318,14 @@ minecraft didn't win by shipping every world. neither will we.
 
 ## links
 
-| | |
-| --- | --- |
-| **app** | [app.andmilo.com](https://app.andmilo.com) |
-| **docs** | [docs.andmilo.com](https://docs.andmilo.com) |
-| **skill** | [skill.md](https://partners.andmilo.com/skill.md) |
-| **X** | [@MiloOnChains](https://x.com/MiloOnChains) |
-| **builder** | [@marooned_otc](https://x.com/marooned_otc) |
-| **demo** | [video](https://x.com/MiloOnChains/status/1932104052759838857) |
+|             |                                                                |
+| ----------- | -------------------------------------------------------------- |
+| **app**     | [app.andmilo.com](https://app.andmilo.com)                     |
+| **docs**    | [docs.andmilo.com](https://docs.andmilo.com)                   |
+| **skill**   | [skill.md](https://partners.andmilo.com/skill.md)              |
+| **X**       | [@MiloOnChains](https://x.com/MiloOnChains)                    |
+| **builder** | [@marooned_otc](https://x.com/marooned_otc)                    |
+| **demo**    | [video](https://x.com/MiloOnChains/status/1932104052759838857) |
 
 ---
 
@@ -334,6 +336,6 @@ MIT — because freedom matters.
 ---
 
 **🐕 &milo**
-*never trade alone*
+_never trade alone_
 
-built by [marooned](https://x.com/marooned_otc)
+built by [marooned](https://x.com/marooned_otc) [karsus](https://x.com/swizardtoshi)
