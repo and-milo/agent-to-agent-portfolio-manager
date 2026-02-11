@@ -155,84 +155,119 @@ follow **systems**, not trades.
 
 all endpoints are versioned under `/api/v1` and require an API key via `X-API-Key`.
 
-### core endpoints
+### auth & signup
 
 ```
-POST   /api/v1/users
-GET    /api/v1/users/{userId}/diary-logs
-GET    /api/v1/wallets/{walletId}/executed-transactions
-GET    /api/v1/wallets/{walletId}/holdings
-GET    /api/v1/users/{userId}/positions
-GET    /api/v1/wallets/{walletId}/transactions
-PATCH  /api/v1/users/{userId}/auto-trade-settings
-GET    /api/v1/conversations/{conversationId}
-POST   /api/v1/messages
+POST   /api/v1/users/siwx/message                            get SIWX message to sign
+POST   /api/v1/users                                         register (submit signed SIWX proof)
 ```
 
-### agent portfolio management
+### portfolio data
 
 ```
-POST   /api/v1/agent/portfolio              create managed portfolio
-GET    /api/v1/agent/portfolio/status        current portfolio state
-POST   /api/v1/agent/portfolio/deposit       deposit funds
-POST   /api/v1/agent/portfolio/withdraw      withdraw funds
-GET    /api/v1/agent/portfolio/performance   performance metrics
-GET    /api/v1/agent/portfolio/risk          risk metrics
-GET    /api/v1/agent/portfolio/history       full audit trail
-PUT    /api/v1/agent/portfolio/strategy      change strategy
+GET    /api/v1/wallets/{walletId}/holdings                   token balances + USD values
+GET    /api/v1/wallets/{walletId}/transactions                wallet transactions (cursor pagination)
+GET    /api/v1/wallets/{walletId}/executed-transactions       order-linked transactions (cursor pagination)
+GET    /api/v1/users/{userId}/positions                       investment positions + PnL
+GET    /api/v1/users/{userId}/diary-logs                      auto-trade diary logs
 ```
 
-### strategy marketplace
+### orders & execution
 
 ```
-GET    /api/v1/strategies                    list available strategies
-GET    /api/v1/strategies/:id                get strategy details
-POST   /api/v1/strategies/fork               fork and customize
-GET    /api/v1/strategies/leaderboard        strategy rankings
+POST   /api/v1/wallets/{walletId}/orders                     create order (buy/sell + TP/SL)
+GET    /api/v1/users/{userId}/orders                          list orders
+GET    /api/v1/users/{userId}/orders/{orderId}                get order details
+POST   /api/v1/users/{userId}/orders/{orderId}/pause          pause order
+POST   /api/v1/users/{userId}/orders/{orderId}/activate       activate order
+DELETE /api/v1/users/{userId}/orders/{orderId}                delete order
+POST   /api/v1/wallets/{walletId}/actions/send                send tokens
+POST   /api/v1/users/{userId}/positions/{thesisId}/close      close position
+POST   /api/v1/users/{userId}/positions/close-all             close all positions
+```
+
+### auto-trade settings & strategies
+
+```
+GET    /api/v1/users/{userId}/auto-trade-settings             get settings
+PATCH  /api/v1/users/{userId}/auto-trade-settings             update settings
+GET    /api/v1/users/{userId}/auto-trade-settings/strategies   list strategies
+POST   /api/v1/users/{userId}/auto-trade-settings/strategies   create strategy
+GET    .../strategies/{strategyId}                             get strategy
+PATCH  .../strategies/{strategyId}                             update strategy
+DELETE .../strategies/{strategyId}                             delete strategy
+POST   .../strategies/{strategyId}/sync                        re-sync strategy
+```
+
+### conversations
+
+```
+POST   /api/v1/users/{userId}/conversations                   start conversation (market-analyst / auto-trader)
+GET    /api/v1/users/{userId}/conversations                    list conversations
+GET    /api/v1/users/{userId}/conversations/{conversationId}   get conversation
+POST   .../conversations/{conversationId}/messages             send message
+GET    .../conversations/{conversationId}/messages             get messages (poll processing flag)
 ```
 
 ### notes
-- resources scoped to `userId` for user-specific data
+- all resources scoped to `userId` or `walletId`
+- auth via `X-API-Key` header
 - errors return standard HTTP codes with JSON error object
-- pagination: `page`, `pageSize` (default 25, max 200), `sort`
+- pagination: `page`/`pageSize` for most endpoints; `cursor`/`limit` for transactions
+- full API reference: [skill.md](https://partners.andmilo.com/skill.md)
 
 ---
 
 ## quick start
 
-### 1. register your agent
+### 1. signup with the CLI
 
 ```bash
-curl -X POST https://api.andmilo.com/v1/agent/register \
-  -H "Content-Type: application/json" \
-  -d '{"agentName": "your-agent", "walletAddress": "your-solana-wallet"}'
+cd cli && npm install && npm run build
+
+./dist/milo signup \
+  --wallet-address <your-solana-wallet> \
+  --secret-key <base58-ed25519-secret-key>
 ```
 
-### 2. create a managed portfolio
+credentials are saved to `~/.milo/config.json` automatically.
+
+### 2. configure auto-trading
 
 ```bash
-curl -X POST https://api.andmilo.com/v1/agent/portfolio \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"strategy": "atf-conservative", "riskProfile": "moderate"}'
+./dist/milo update-settings \
+  --is-active true \
+  --risk-tolerance balanced \
+  --strategy "SWING TRADER" \
+  --allocation-json '{"majors":40,"memes":20,"stables":30,"native":10}'
 ```
 
-### 3. deposit funds
+### 3. monitor your portfolio
 
 ```bash
-curl -X POST https://api.andmilo.com/v1/agent/portfolio/deposit \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"amount": 50, "token": "SOL"}'
+./dist/milo get-holdings
+./dist/milo list-positions --status active
+./dist/milo diary-logs
 ```
 
 milo takes it from here.
 
 ---
 
-## CLI
+## integration
 
-see `cli/README.md` for the reference CLI. designed for agent builders to automate provisioning, portfolio monitoring, trading oversight, and conversational support.
+**agents don't need the CLI.** any Claude, OpenAI, or custom agent can work directly with the [skill.md](https://partners.andmilo.com/skill.md) served at `https://partners.andmilo.com/skill.md`. the skill file contains the full API reference, auth flow, and endpoint specs — everything an agent needs to integrate autonomously.
+
+### CLI (optional)
+
+the repo includes a TypeScript CLI (`cli/`) as a convenience tool for manual testing, scripting, and debugging. it wraps the same API the skill.md describes.
+
+```bash
+cd cli && npm install && npm run build
+./dist/milo --help
+```
+
+see [`cli/README.md`](cli/README.md) for setup, all 29 commands, and examples.
 
 ---
 
@@ -285,7 +320,7 @@ minecraft didn't win by shipping every world. neither will we.
 | --- | --- |
 | **app** | [app.andmilo.com](https://app.andmilo.com) |
 | **docs** | [docs.andmilo.com](https://docs.andmilo.com) |
-| **skill** | [skill.md](skill.md) |
+| **skill** | [skill.md](https://partners.andmilo.com/skill.md) |
 | **X** | [@MiloOnChains](https://x.com/MiloOnChains) |
 | **builder** | [@marooned_otc](https://x.com/marooned_otc) |
 | **demo** | [video](https://x.com/MiloOnChains/status/1932104052759838857) |

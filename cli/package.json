@@ -1,0 +1,16 @@
+{
+  "name": "@milo/cli",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup && mv dist/milo.js dist/milo && chmod +x dist/milo",
+    "dev": "node --import tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.8.0"
+  }
+}
