@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsup && mv dist/milo.js dist/milo && chmod +x dist/milo",
-    "dev": "node --import tsx src/cli.ts"
+    "dev": "node --import tsx src/cli.ts",
+    "test": "node --import tsx --test src/**/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

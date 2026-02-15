@@ -41,6 +41,43 @@ function parseJson(value: string | undefined, name: string): unknown {
 }
 
 const SOLANA_MAINNET_CHAIN_ID = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
+const MAX_PAGE_VALUE = 100;
+const MAX_PAGE_SIZE_VALUE = 100;
+const MAX_TAKE_PROFITS = 5;
+const MAX_STOP_LOSSES = 5;
+const MAX_TOTAL_DEPENDANTS = 8;
+
+function parseOptionalJsonArray(value: unknown, flagName: string): unknown[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new Error(`--${flagName} must be a JSON array`);
+  }
+  return value;
+}
+
+export function validateCreateOrderDependants(
+  takeProfits: unknown,
+  stopLosses: unknown,
+): void {
+  const tp = parseOptionalJsonArray(takeProfits, 'take-profits-json') ?? [];
+  const sl = parseOptionalJsonArray(stopLosses, 'stop-losses-json') ?? [];
+
+  if (tp.length > MAX_TAKE_PROFITS) {
+    throw new Error(
+      `takeProfits cannot exceed ${MAX_TAKE_PROFITS} entries`,
+    );
+  }
+  if (sl.length > MAX_STOP_LOSSES) {
+    throw new Error(
+      `stopLosses cannot exceed ${MAX_STOP_LOSSES} entries`,
+    );
+  }
+  if (tp.length + sl.length > MAX_TOTAL_DEPENDANTS) {
+    throw new Error(
+      `Total dependant orders cannot exceed ${MAX_TOTAL_DEPENDANTS}`,
+    );
+  }
+}
 
 // ── Commands ──────────────────────────────────────────────────────
 
@@ -173,8 +210,8 @@ export const COMMANDS: CommandDef[] = [
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
       { name: 'status', description: 'Filter: active, pending, not_active' },
-      { name: 'page', description: 'Page number' },
-      { name: 'page-size', description: 'Items per page' },
+      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
@@ -202,7 +239,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'close-all-positions',
-    description: 'Close all active and pending positions',
+    description: 'Close all active and pending positions (API limit: 1 request/min)',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
     ],
@@ -216,7 +253,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'create-order',
-    description: 'Create a buy or sell order with optional TP/SL',
+    description: 'Create a buy or sell order with optional TP/SL (API limit: 5 requests/min)',
     flags: [
       { name: 'wallet-id', description: 'Wallet ID (default: from config)' },
       { name: 'token-address', description: 'Token mint address', required: true },
@@ -224,8 +261,8 @@ export const COMMANDS: CommandDef[] = [
       { name: 'payload-json', description: 'Order payload JSON (amount, trigger, execution)', required: true },
       { name: 'status', description: 'active or draft (default: active)' },
       { name: 'position-thesis-id', description: 'Link to a position thesis' },
-      { name: 'take-profits-json', description: 'Take-profit ladder JSON array' },
-      { name: 'stop-losses-json', description: 'Stop-loss ladder JSON array' },
+      { name: 'take-profits-json', description: `Take-profit ladder JSON array (max ${MAX_TAKE_PROFITS})` },
+      { name: 'stop-losses-json', description: `Stop-loss ladder JSON array (max ${MAX_STOP_LOSSES})` },
       { name: 'expires-at', description: 'Expiration time (ISO 8601)' },
     ],
     handler: async (flags, client, config) => {
@@ -239,9 +276,10 @@ export const COMMANDS: CommandDef[] = [
       if (flags['position-thesis-id']) body.positionThesisId = flags['position-thesis-id'];
       if (flags['expires-at']) body.expiresAt = flags['expires-at'];
       const tp = parseJson(flags['take-profits-json'], 'take-profits-json');
-      if (tp) body.takeProfits = tp;
       const sl = parseJson(flags['stop-losses-json'], 'stop-losses-json');
-      if (sl) body.stopLosses = sl;
+      validateCreateOrderDependants(tp, sl);
+      if (tp !== undefined) body.takeProfits = tp;
+      if (sl !== undefined) body.stopLosses = sl;
       return client.createOrder(walletId, body);
     },
   },
@@ -254,8 +292,8 @@ export const COMMANDS: CommandDef[] = [
       { name: 'status', description: 'active, paused, error, fulfilled, archived, draft' },
       { name: 'type', description: 'buy or sell' },
       { name: 'token-address', description: 'Filter by token' },
-      { name: 'page', description: 'Page number' },
-      { name: 'page-size', description: 'Items per page' },
+      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
@@ -401,8 +439,8 @@ export const COMMANDS: CommandDef[] = [
       { name: 'user-id', description: 'User ID (default: from config)' },
       { name: 'scope', description: 'all, owned, or public' },
       { name: 'q', description: 'Search query' },
-      { name: 'page', description: 'Page number' },
-      { name: 'page-size', description: 'Items per page' },
+      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
@@ -543,8 +581,8 @@ export const COMMANDS: CommandDef[] = [
     description: 'List conversations',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'page', description: 'Page number' },
-      { name: 'page-size', description: 'Items per page' },
+      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
@@ -592,8 +630,8 @@ export const COMMANDS: CommandDef[] = [
     flags: [
       { name: 'conversation-id', description: 'Conversation ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'page', description: 'Page number' },
-      { name: 'page-size', description: 'Items per page' },
+      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
@@ -612,8 +650,8 @@ export const COMMANDS: CommandDef[] = [
     description: 'Get auto-trade diary logs',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'page', description: 'Page number' },
-      { name: 'page-size', description: 'Items per page' },
+      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);

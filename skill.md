@@ -533,7 +533,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies?scope=ow
 | `scope` | `all`, `owned`, `public` | Filter by ownership |
 | `q` | string | Search by name/description |
 | `page` | number | Page number (default: 1) |
-| `pageSize` | number | Items per page (default: 25) |
+| `pageSize` | number | Items per page (default: 25, max: 100) |
 
 #### GET /api/v1/users/{userId}/auto-trade-settings/strategies/{strategyId}
 
@@ -721,7 +721,17 @@ curl -X POST {{BASE_URL}}/api/v1/wallets/{walletId}/orders \
 - `percentage` (1–100) — percent of position to sell
 - `lossPercentage` (1–100) — loss percent to trigger the SL
 
-Dependants are created as **draft sell orders** with `parentId` pointing to the main order. They use relative triggers (`rise` for TP, `drop` for SL). If a dependant fails to create, its entry in `dependants` will have an `error` field instead of `order`.
+Dependant creation flow (enforced):
+- Main order is created first.
+- TP and SL dependants are created sequentially as draft sell children (`parentId` = main order ID).
+- Dependant failures are captured per dependant entry while the main order still returns `201`.
+
+Guardrails (always enforce mode):
+- `takeProfits.length <= 5`
+- `stopLosses.length <= 5`
+- `takeProfits.length + stopLosses.length <= 8`
+
+Violations return `400 bad_request` with a clear validation message. Dependants use relative triggers (`rise` for TP, `drop` for SL).
 
 **Order payload structure:**
 
@@ -764,8 +774,8 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/orders?status=active&type=buy&page=1&pa
 | `status` | string | `active`, `paused`, `error`, `fulfilled`, `archived`, `draft` |
 | `type` | string | `buy`, `sell` |
 | `tokenAddress` | string | Filter by token |
-| `page` | number | Page number (default: 1) |
-| `pageSize` | number | Items per page (default: 25, max: 200) |
+| `page` | number | Page number (default: 1, max: 100) |
+| `pageSize` | number | Items per page (default: 25, max: 100) |
 
 #### GET /api/v1/users/{userId}/orders/{orderId}
 
@@ -1025,18 +1035,25 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/diary-logs?page=1&pageSize=25" \
 | Conversations (write: create, send message)                     | 2     | 60s    |
 | Conversations (read: list, get, messages)                       | 30    | 60s    |
 | Wallet actions (send)                                           | 10    | 60s    |
-| Orders (write: create, pause, activate, delete)                 | 10    | 60s    |
+| Orders create (`POST /wallets/{walletId}/orders`)              | 5     | 60s    |
+| Orders write (`pause`, `activate`, `delete`)                    | 10    | 60s    |
 | Orders (read: list, get)                                        | 60    | 60s    |
 | Position close                                                  | 10    | 60s    |
+| Position close-all (`POST /users/{userId}/positions/close-all`) | 1     | 60s    |
 
-Rate limit errors return `429 Too Many Requests`.
+Rate limit rejections return `429 Too Many Requests` with:
+- `error.code = "rate_limit_exceeded"`
+- `Retry-After` header (seconds)
+- `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers
+
+Retry behavior: back off and retry only after `Retry-After` elapses.
 
 ## Pagination
 
 All list endpoints support pagination:
 
-- `page` - Page number (default: 1)
-- `pageSize` - Items per page (default: 25, max: 200)
+- `page` - Page number (default: 1, max: 100)
+- `pageSize` - Items per page (default: 25, max: 100)
 
 Response includes `meta`:
 
@@ -1052,7 +1069,7 @@ Response includes `meta`:
 | 401    | `unauthorized`   | Missing or invalid API key                      |
 | 404    | `not_found`      | Resource not found                              |
 | 409    | `error`          | Conflict (e.g., user already exists)            |
-| 429    | `bad_request`    | Rate limit exceeded                             |
+| 429    | `rate_limit_exceeded` | Rate limit exceeded                        |
 | 500    | `internal_error` | Unexpected server error                         |
 
 **Error response format:**

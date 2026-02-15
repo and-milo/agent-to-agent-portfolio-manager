@@ -55,8 +55,8 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `executed-transactions` | Get executed (order-linked) transactions |
 | `list-positions` | List investment positions with PnL |
 | `close-position` | Close a position |
-| `close-all-positions` | Close all positions |
-| `create-order` | Create a buy/sell order with optional TP/SL |
+| `close-all-positions` | Close all positions (API limit: 1 request/min) |
+| `create-order` | Create a buy/sell order with optional TP/SL (API limit: 5 requests/min) |
 | `list-orders` | List orders with filters |
 | `get-order` | Get order details |
 | `pause-order` | Pause an active order |
@@ -78,6 +78,18 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `get-messages` | Get messages (poll `processing` flag) |
 | `diary-logs` | Get auto-trade diary logs |
 | `config` | Show or update `~/.milo/config.json` |
+
+## Guardrails and Throttling
+
+- `create-order` preflight validation enforces:
+  - `takeProfits.length <= 5`
+  - `stopLosses.length <= 5`
+  - `takeProfits.length + stopLosses.length <= 8`
+- Page-based commands use API pagination caps: `page <= 100`, `pageSize <= 100`.
+- API throttles to account for in automation:
+  - `POST /api/v1/wallets/{walletId}/orders`: `5/min`
+  - `POST /api/v1/users/{userId}/positions/close-all`: `1/min`
+- On `429`, respect `Retry-After` and retry only after that delay.
 
 ## Examples
 
