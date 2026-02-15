@@ -59,6 +59,8 @@ The partner-api host also exposes MCP at `/mcp` using Streamable HTTP:
 - `GET /mcp` (session SSE stream)
 - `DELETE /mcp` (terminate session)
 
+`POST /mcp` initialize accepts optional `X-API-Key`. If omitted, the MCP session starts unauthenticated and only signup/public tools are usable until `signup` returns an API key. MCP paginated tools enforce `page <= 100` and `pageSize <= 100`. Caller IP is forwarded to downstream partner-api calls so signup/SIWX per-IP throttling remains per caller. Sessions are bounded with idle eviction, so clients should handle `429` on initialize and re-initialize after invalid-session errors. There is no server-side fallback key.
+
 ## Wallet & Deposits
 
 Milo creates a **non-custodial** Solana wallet for each user via Turnkey. The wallet-creating account is the owner; Milo receives delegated permission for trading.

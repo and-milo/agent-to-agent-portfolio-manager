@@ -19,6 +19,7 @@ The build produces `dist/milo` — a self-contained executable.
 ## MCP Endpoint
 
 The same partner-api server exposes MCP on `/mcp` (Streamable HTTP).  
+`POST /mcp` initialize accepts optional `X-API-Key`; without it, MCP is limited to signup/public tools until `signup` returns an API key. MCP paginated tools enforce `page <= 100` and `pageSize <= 100`. Caller IP is forwarded to downstream partner-api calls so signup/SIWX per-IP throttling remains per caller. Sessions are bounded with idle eviction; handle possible `429` on initialize and re-initialize after invalid-session errors. No server-side fallback key is used.  
 This CLI continues to use the REST endpoints directly.
 
 ## Authentication

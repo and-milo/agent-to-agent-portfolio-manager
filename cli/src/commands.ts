@@ -79,6 +79,22 @@ export function validateCreateOrderDependants(
   }
 }
 
+function validateOptionalPositiveInt(flagName: string, value: string | undefined, max: number) {
+  if (value === undefined) return;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`--${flagName} must be a positive integer`);
+  }
+  if (parsed > max) {
+    throw new Error(`--${flagName} cannot exceed ${max}`);
+  }
+}
+
+export function validatePagingFlags(page: string | undefined, pageSize: string | undefined): void {
+  validateOptionalPositiveInt('page', page, MAX_PAGE_VALUE);
+  validateOptionalPositiveInt('page-size', pageSize, MAX_PAGE_SIZE_VALUE);
+}
+
 // ── Commands ──────────────────────────────────────────────────────
 
 export const COMMANDS: CommandDef[] = [
@@ -215,6 +231,7 @@ export const COMMANDS: CommandDef[] = [
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
+      validatePagingFlags(flags['page'], flags['page-size']);
       return client.listPositions(userId, {
         status: flags['status'],
         page: flags['page'],
@@ -297,6 +314,7 @@ export const COMMANDS: CommandDef[] = [
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
+      validatePagingFlags(flags['page'], flags['page-size']);
       return client.listOrders(userId, {
         status: flags['status'],
         type: flags['type'],
@@ -444,6 +462,7 @@ export const COMMANDS: CommandDef[] = [
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
+      validatePagingFlags(flags['page'], flags['page-size']);
       return client.listStrategies(userId, {
         scope: flags['scope'],
         q: flags['q'],
@@ -586,6 +605,7 @@ export const COMMANDS: CommandDef[] = [
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
+      validatePagingFlags(flags['page'], flags['page-size']);
       return client.listConversations(userId, {
         page: flags['page'],
         pageSize: flags['page-size'],
@@ -636,6 +656,7 @@ export const COMMANDS: CommandDef[] = [
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
       const conversationId = requireFlag(flags, 'conversation-id');
+      validatePagingFlags(flags['page'], flags['page-size']);
       return client.getMessages(userId, conversationId, {
         page: flags['page'],
         pageSize: flags['page-size'],
@@ -655,6 +676,7 @@ export const COMMANDS: CommandDef[] = [
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
+      validatePagingFlags(flags['page'], flags['page-size']);
       return client.getDiaryLogs(userId, {
         page: flags['page'],
         pageSize: flags['page-size'],
