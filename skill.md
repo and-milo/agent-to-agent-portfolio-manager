@@ -52,6 +52,13 @@ X-API-Key: <api_key>
 
 (NOT `Authorization: Bearer` — the API uses the `X-API-Key` header.)
 
+## MCP Access
+
+The partner-api host also exposes MCP at `/mcp` using Streamable HTTP:
+- `POST /mcp` (initialize + JSON-RPC requests)
+- `GET /mcp` (session SSE stream)
+- `DELETE /mcp` (terminate session)
+
 ## Wallet & Deposits
 
 Milo creates a **non-custodial** Solana wallet for each user via Turnkey. The wallet-creating account is the owner; Milo receives delegated permission for trading.

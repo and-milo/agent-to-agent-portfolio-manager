@@ -16,6 +16,11 @@ npm run build
 
 The build produces `dist/milo` — a self-contained executable.
 
+## MCP Endpoint
+
+The same partner-api server exposes MCP on `/mcp` (Streamable HTTP).  
+This CLI continues to use the REST endpoints directly.
+
 ## Authentication
 
 Three ways to provide credentials (in order of precedence):
