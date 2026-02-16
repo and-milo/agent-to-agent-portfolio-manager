@@ -98,6 +98,12 @@ export class PartnerApiClient {
     return this.publicRequest('POST', '/api/v1/users', body);
   }
 
+  // ── Me ─────────────────────────────────────────────────────────
+
+  getMe() {
+    return this.request('GET', '/api/v1/me');
+  }
+
   // ── Holdings ────────────────────────────────────────────────────
 
   getHoldings(walletId: string) {
@@ -258,6 +264,66 @@ export class PartnerApiClient {
       'POST',
       `/api/v1/users/${userId}/auto-trade-settings/strategies/${strategyId}/sync`,
     );
+  }
+
+  // ── Arena ──────────────────────────────────────────────────────
+
+  deployArenaStrategy(userId: string, body: { strategyId: string }) {
+    return this.request('POST', `/api/v1/users/${userId}/arena/deploy`, body);
+  }
+
+  withdrawArenaStrategy(userId: string, body: { strategyId: string }) {
+    return this.request('POST', `/api/v1/users/${userId}/arena/withdraw`, body);
+  }
+
+  getArenaLeaderboard(
+    userId: string,
+    opts?: {
+      page?: string;
+      pageSize?: string;
+      timeframe?: string;
+      sortKey?: string;
+      sortDirection?: string;
+    },
+  ) {
+    return this.request('GET', `/api/v1/users/${userId}/arena/leaderboard`, undefined, {
+      page: opts?.page,
+      pageSize: opts?.pageSize,
+      timeframe: opts?.timeframe,
+      sortKey: opts?.sortKey,
+      sortDirection: opts?.sortDirection,
+    });
+  }
+
+  // ── Quests ────────────────────────────────────────────────────────
+
+  listQuests(
+    userId: string,
+    opts?: {
+      page?: string;
+      pageSize?: string;
+      unlocked?: string;
+      unclaimed?: string;
+      claimed?: string;
+      mode?: string;
+    },
+  ) {
+    return this.request('GET', `/api/v1/users/${userId}/quests`, undefined, {
+      page: opts?.page,
+      pageSize: opts?.pageSize,
+      unlocked: opts?.unlocked,
+      unclaimed: opts?.unclaimed,
+      claimed: opts?.claimed,
+      mode: opts?.mode,
+    });
+  }
+
+  claimQuest(userId: string, questId: string) {
+    return this.request('POST', `/api/v1/users/${userId}/quests/${questId}/claim`);
+  }
+
+  getBonesBalance(userId: string) {
+    return this.request('GET', `/api/v1/users/${userId}/quests/bones`);
   }
 
   // ── Conversations ───────────────────────────────────────────────

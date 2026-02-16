@@ -56,6 +56,7 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | Command | Description |
 |---------|-------------|
 | `signup` | Register via SIWX wallet verification (auto-signs with `--secret-key`) |
+| `me` | Get current user profile and wallets for the authenticated API key |
 | `get-holdings` | Get token holdings for a wallet |
 | `transactions` | List wallet transactions |
 | `executed-transactions` | Get executed (order-linked) transactions |
@@ -77,6 +78,12 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `update-strategy` | Update a strategy |
 | `delete-strategy` | Delete a strategy |
 | `sync-strategy` | Re-sync settings with a linked strategy |
+| `deploy-arena` | Deploy a public strategy to the arena |
+| `withdraw-arena` | Withdraw from the arena (transfers holdings back) |
+| `arena-leaderboard` | Get the arena leaderboard |
+| `list-quests` | List quests with progress and bones rewards (defaults to unlocked) |
+| `claim-quest` | Claim bones (reward points) for a completed quest |
+| `bones-balance` | Get your bones (reward points) balance |
 | `create-conversation` | Start a conversation with Milo AI |
 | `list-conversations` | List conversations |
 | `get-conversation` | Get conversation details |
@@ -104,6 +111,9 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 ./dist/milo signup \
   --wallet-address 7xKX...abc \
   --secret-key 4wBq...xyz
+
+# Look up your user ID and wallet IDs from your API key
+./dist/milo me
 
 # After signup, user-id and wallet-id default from config
 ./dist/milo get-holdings
@@ -134,6 +144,17 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
   --recipient 9abc...def \
   --token So11111111111111111111111111111111 \
   --amount 1.5
+
+# Arena — deploy a strategy, view leaderboard, withdraw
+./dist/milo deploy-arena --strategy-id <uuid>
+./dist/milo arena-leaderboard --timeframe 30d --sort-key pnl --sort-direction desc
+./dist/milo withdraw-arena --strategy-id <uuid>
+
+# Quests & Bones — fetch open quests (unlocked by default), claim bones, view balance
+./dist/milo list-quests
+./dist/milo list-quests --unclaimed true
+./dist/milo claim-quest --quest-id <uuid>
+./dist/milo bones-balance
 ```
 
 ## Development

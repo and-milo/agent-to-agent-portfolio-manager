@@ -164,6 +164,17 @@ export const COMMANDS: CommandDef[] = [
     },
   },
 
+  // ── Me ───────────────────────────────────────────────────────
+
+  {
+    name: 'me',
+    description: 'Get current user profile and wallets for the authenticated API key',
+    flags: [],
+    handler: async (_flags, client) => {
+      return client.getMe();
+    },
+  },
+
   // ── Holdings ──────────────────────────────────────────────────
 
   {
@@ -661,6 +672,114 @@ export const COMMANDS: CommandDef[] = [
         page: flags['page'],
         pageSize: flags['page-size'],
       });
+    },
+  },
+
+  // ── Arena ────────────────────────────────────────────────────
+
+  {
+    name: 'deploy-arena',
+    description: 'Deploy a strategy to the arena',
+    flags: [
+      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: 'strategy-id', description: 'Strategy ID to deploy', required: true },
+    ],
+    handler: async (flags, client, config) => {
+      const userId = requireFlag(flags, 'user-id', config.user_id);
+      const strategyId = requireFlag(flags, 'strategy-id');
+      return client.deployArenaStrategy(userId, { strategyId });
+    },
+  },
+
+  {
+    name: 'withdraw-arena',
+    description: 'Withdraw from the arena',
+    flags: [
+      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: 'strategy-id', description: 'Strategy ID to withdraw', required: true },
+    ],
+    handler: async (flags, client, config) => {
+      const userId = requireFlag(flags, 'user-id', config.user_id);
+      const strategyId = requireFlag(flags, 'strategy-id');
+      return client.withdrawArenaStrategy(userId, { strategyId });
+    },
+  },
+
+  {
+    name: 'arena-leaderboard',
+    description: 'Get the arena leaderboard',
+    flags: [
+      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: 'timeframe', description: 'Timeframe: 1d, 30d, 90d (default: 30d)' },
+      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
+      { name: 'sort-key', description: 'Sort by: pnl, winRate, returnPct, accountValue' },
+      { name: 'sort-direction', description: 'Sort direction: asc, desc' },
+    ],
+    handler: async (flags, client, config) => {
+      const userId = requireFlag(flags, 'user-id', config.user_id);
+      validatePagingFlags(flags['page'], flags['page-size']);
+      return client.getArenaLeaderboard(userId, {
+        page: flags['page'],
+        pageSize: flags['page-size'],
+        timeframe: flags['timeframe'],
+        sortKey: flags['sort-key'],
+        sortDirection: flags['sort-direction'],
+      });
+    },
+  },
+
+  // ── Quests & Bones ──────────────────────────────────────────────
+
+  {
+    name: 'list-quests',
+    description: 'List quests with progress and bones rewards (defaults to unlocked)',
+    flags: [
+      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: 'unlocked', description: 'Filter for unlocked quests (default: true)' },
+      { name: 'unclaimed', description: 'Filter for unclaimed quests (true/false)' },
+      { name: 'claimed', description: 'Filter for claimed quests (true/false)' },
+      { name: 'mode', description: 'Sort mode: completed_last' },
+      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
+    ],
+    handler: async (flags, client, config) => {
+      const userId = requireFlag(flags, 'user-id', config.user_id);
+      validatePagingFlags(flags['page'], flags['page-size']);
+      return client.listQuests(userId, {
+        page: flags['page'],
+        pageSize: flags['page-size'],
+        unlocked: flags['unlocked'],
+        unclaimed: flags['unclaimed'],
+        claimed: flags['claimed'],
+        mode: flags['mode'],
+      });
+    },
+  },
+
+  {
+    name: 'claim-quest',
+    description: 'Claim bones (reward points) for a completed quest',
+    flags: [
+      { name: 'quest-id', description: 'Quest ID to claim', required: true },
+      { name: 'user-id', description: 'User ID (default: from config)' },
+    ],
+    handler: async (flags, client, config) => {
+      const userId = requireFlag(flags, 'user-id', config.user_id);
+      const questId = requireFlag(flags, 'quest-id');
+      return client.claimQuest(userId, questId);
+    },
+  },
+
+  {
+    name: 'bones-balance',
+    description: 'Get your bones (reward points) balance',
+    flags: [
+      { name: 'user-id', description: 'User ID (default: from config)' },
+    ],
+    handler: async (flags, client, config) => {
+      const userId = requireFlag(flags, 'user-id', config.user_id);
+      return client.getBonesBalance(userId);
     },
   },
 

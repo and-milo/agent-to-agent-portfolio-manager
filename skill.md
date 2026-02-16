@@ -15,6 +15,8 @@ Milo is an autonomous Solana portfolio manager. Through this API you can registe
 - **Orders** - Create limit, market, stop-loss, and take-profit orders on any Solana token.
 - **Token transfers** - Send any SPL token or SOL from your Milo wallet to any Solana address.
 - **Positions** - Track open positions with PnL data, close positions.
+- **Arena** — Deploy public strategies to a competitive leaderboard. Milo funds an arena wallet and trades autonomously using the strategy. Withdraw to reclaim holdings.
+- **Quests & Bones** — Complete quests (event-driven tasks like trades, signups) to earn bones (reward points). Check quests regularly and claim bones for completed quests.
 - **AI conversations** - Chat with Milo's market analyst, auto-trader, or game agent. Async processing with polling.
 - **Portfolio data** - Holdings, transactions, executed transactions, diary logs.
 
@@ -25,7 +27,8 @@ Milo is an autonomous Solana portfolio manager. Through this API you can registe
 3. **Save credentials** - Store the API key, user ID, wallet ID, and wallet address in `~/.milo/config.json`.
 4. **Deposit SOL** - Send SOL to your Milo wallet address (the `type: "milo"` wallet from signup).
 5. **Activate auto-trader** - Call `PATCH /api/v1/users/{userId}/auto-trade-settings` with `{ "isActive": true }`.
-6. **Start trading** - Create orders, chat with agents, or let the auto-trader manage your portfolio.
+6. **Fetch open quests** - Call `GET /api/v1/users/{userId}/quests` to see available quests. Claim bones for any completed quests.
+7. **Start trading** - Create orders, chat with agents, or let the auto-trader manage your portfolio.
 
 ## Credential Storage
 
@@ -328,6 +331,34 @@ All endpoints (except signup) require:
 X-API-Key: <api_key>
 ```
 
+### Me
+
+#### GET /api/v1/me
+Get the current user profile and wallets for the authenticated API key. Use this to discover your `userId` and `walletId` values.
+
+```bash
+curl {{BASE_URL}}/api/v1/me \
+  -H "X-API-Key: $API_KEY"
+```
+
+**Response (200):**
+```json
+{
+  "user": {
+    "id": "uuid",
+    "signupWalletId": "uuid",
+    "provider": "siwx",
+    "createdAt": "2025-01-01T00:00:00.000Z"
+  },
+  "wallets": [
+    { "id": "uuid", "address": "<address>", "chain": "solana", "type": "signup" },
+    { "id": "uuid", "address": "<address>", "chain": "solana", "type": "milo" }
+  ]
+}
+```
+
+---
+
 ### Signup
 
 Signup is a two-step process: first request a SIWX message from the server, then sign it and submit the proof.
@@ -615,6 +646,182 @@ curl -X PATCH {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings \
 ```bash
 curl -X POST {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies/{strategyId}/sync \
   -H "X-API-Key: $API_KEY"
+```
+
+---
+
+### Arena
+
+Deploy a public strategy to the arena leaderboard. Milo creates a custody wallet, funds it, and trades autonomously using the strategy. The strategy must be public and owned by the user. Deployment requires at least 1 SOL balance (0.01 SOL in dev). Withdrawing transfers all holdings back to the user's Milo wallet.
+
+#### POST /api/v1/users/{userId}/arena/deploy
+Deploy a strategy to the arena.
+
+```bash
+curl -X POST {{BASE_URL}}/api/v1/users/{userId}/arena/deploy \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "strategyId": "<strategy-uuid>" }'
+```
+
+**Request body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `strategyId` | uuid | yes | ID of a public strategy owned by the user |
+
+**Response (200):**
+```json
+{
+  "data": {
+    "arenaUserId": "uuid",
+    "custodyWalletId": "uuid",
+    "custodyWalletAddress": "<solana-address>",
+    "fundingTxSignature": "<transaction-signature>",
+    "strategyId": "uuid"
+  }
+}
+```
+
+#### POST /api/v1/users/{userId}/arena/withdraw
+Withdraw from the arena. Transfers all holdings from the custody wallet back to the user's Milo wallet.
+
+```bash
+curl -X POST {{BASE_URL}}/api/v1/users/{userId}/arena/withdraw \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "strategyId": "<strategy-uuid>" }'
+```
+
+**Request body:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `strategyId` | uuid | yes | ID of the deployed strategy to withdraw |
+
+**Response (200):**
+```json
+{
+  "data": {
+    "arenaUserId": "uuid",
+    "custodyWalletId": "uuid",
+    "custodyWalletAddress": "<solana-address>",
+    "recipientWalletAddress": "<solana-address>",
+    "transferTxs": [
+      { "tokenAddress": "<mint-address>", "amount": 1.5, "signature": "<tx-signature>" }
+    ]
+  }
+}
+```
+
+#### GET /api/v1/users/{userId}/arena/leaderboard
+Get the arena leaderboard.
+
+```bash
+curl "{{BASE_URL}}/api/v1/users/{userId}/arena/leaderboard?timeframe=30d&page=1&pageSize=25&sortKey=pnl&sortDirection=desc" \
+  -H "X-API-Key: $API_KEY"
+```
+
+**Query parameters:**
+| Param | Type | Values | Default |
+|-------|------|--------|---------|
+| `timeframe` | string | `1d`, `30d`, `90d` | — |
+| `page` | number | Page number | 1 |
+| `pageSize` | number | Items per page (max: 100) | 25 |
+| `sortKey` | string | `pnl`, `winRate`, `returnPct`, `accountValue` | — |
+| `sortDirection` | string | `asc`, `desc` | — |
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "strategy": "uuid",
+      "strategyName": "SOL Ecosystem DCA",
+      "ownerUserId": "uuid",
+      "ownerUsername": "trader1",
+      "pnl": 120.50,
+      "winRate": 0.65,
+      "returnPct": 12.5,
+      "accountValue": 1120.50,
+      "arenaWalletAddress": "<solana-address>",
+      "currentHoldings": [ ... ]
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 25, "total": 100, "pages": 4 }
+}
+```
+
+---
+
+### Quests & Bones
+
+Quests are event-driven tasks that reward bones (points) upon completion. **Check quests regularly** — call `list_quests` to see open quests, and with `unclaimed=true` to discover completed quests, then `claim_quest` to collect the bones.
+
+#### GET /api/v1/users/{userId}/quests
+List quests with progress and requirements. By default returns only unlocked (available) quests.
+
+```bash
+curl "{{BASE_URL}}/api/v1/users/{userId}/quests?page=1&pageSize=25" \
+  -H "X-API-Key: $API_KEY"
+```
+
+**Query parameters:**
+| Param | Type | Values | Default |
+|-------|------|--------|---------|
+| `unlocked` | boolean | Filter for unlocked quests (available) | `true` |
+| `unclaimed` | boolean | Filter for completed but unclaimed quests | — |
+| `claimed` | boolean | Filter for claimed quests | — |
+| `mode` | string | `completed_last` | — |
+| `page` | number | Page number | 1 |
+| `pageSize` | number | Items per page (max: 100) | 25 |
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "questId": "uuid",
+      "title": "First Trade",
+      "award": 100,
+      "completed": true,
+      "claimed": false,
+      "unlocked": true,
+      "requirements": [
+        { "requirementId": "uuid", "aggregationKind": "count", "targetValue": 1, "currentValue": 1, "completed": true }
+      ]
+    }
+  ],
+  "meta": { "page": 1, "pageSize": 25, "total": 10, "pages": 1 }
+}
+```
+
+#### POST /api/v1/users/{userId}/quests/{questId}/claim
+Claim bones for a completed quest.
+
+```bash
+curl -X POST {{BASE_URL}}/api/v1/users/{userId}/quests/{questId}/claim \
+  -H "X-API-Key: $API_KEY"
+```
+
+Returns `{ "data": null }` on success, 404 if not found or already claimed.
+
+#### GET /api/v1/users/{userId}/quests/bones
+Get the user's bones balance.
+
+```bash
+curl "{{BASE_URL}}/api/v1/users/{userId}/quests/bones" \
+  -H "X-API-Key: $API_KEY"
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "userId": "uuid",
+    "username": "alice",
+    "balance": 500,
+    "unclaimed": 100
+  }
+}
 ```
 
 ---
@@ -1037,12 +1244,17 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/diary-logs?page=1&pageSize=25" \
 | --------------------------------------------------------------- | ----- | ------ |
 | Signup (per IP)                                                 | 5     | 60s    |
 | Signup (per wallet)                                             | 1     | 60s    |
+| Me (`GET /api/v1/me`)                                           | 60    | 60s    |
 | Portfolio reads (holdings, transactions, positions, diary-logs) | 60    | 60s    |
 | Auto-trade settings (write)                                     | 10    | 60s    |
 | Strategies (write: create, update, delete)                      | 10    | 60s    |
 | Strategies (read: list, get)                                    | 60    | 60s    |
 | Conversations (write: create, send message)                     | 2     | 60s    |
 | Conversations (read: list, get, messages)                       | 30    | 60s    |
+| Arena write (deploy, withdraw)                                  | 5     | 60s    |
+| Arena read (leaderboard)                                        | 30    | 60s    |
+| Quests read (list, bones balance)                               | 60    | 60s    |
+| Quests write (claim)                                            | 10    | 60s    |
 | Wallet actions (send)                                           | 10    | 60s    |
 | Orders create (`POST /wallets/{walletId}/orders`)              | 5     | 60s    |
 | Orders write (`pause`, `activate`, `delete`)                    | 10    | 60s    |
