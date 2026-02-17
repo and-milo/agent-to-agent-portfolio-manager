@@ -9,6 +9,28 @@ export interface ClientOpts {
   apiKey?: string;
 }
 
+export type ConversationOverageAsset = 'USDC' | 'SOL';
+
+export interface ConversationOveragePaymentOpts {
+  enabled?: boolean;
+  asset?: ConversationOverageAsset;
+  txSignature?: string;
+}
+
+class PartnerApiHttpError extends Error {
+  readonly status: number;
+  readonly body: any;
+  readonly responseHeaders: Headers;
+
+  constructor(status: number, message: string, body: any, responseHeaders: Headers) {
+    super(message);
+    this.name = 'PartnerApiHttpError';
+    this.status = status;
+    this.body = body;
+    this.responseHeaders = responseHeaders;
+  }
+}
+
 export class PartnerApiClient {
   private baseUrl: string;
   private apiKey: string | undefined;
@@ -32,13 +54,14 @@ export class PartnerApiClient {
     path: string,
     body?: unknown,
     query?: Record<string, string | undefined>,
+    extraHeaders?: Record<string, string>,
   ): Promise<T> {
     if (!this.apiKey) {
       throw new Error(
         'API key is not set. Run "milo signup" first, or set --api-key / MILO_API_KEY.',
       );
     }
-    return this.rawRequest<T>(method, path, body, query, this.apiKey);
+    return this.rawRequest<T>(method, path, body, query, this.apiKey, extraHeaders);
   }
 
   /** Unauthenticated request — no API key needed. */
@@ -47,8 +70,9 @@ export class PartnerApiClient {
     path: string,
     body?: unknown,
     query?: Record<string, string | undefined>,
+    extraHeaders?: Record<string, string>,
   ): Promise<T> {
-    return this.rawRequest<T>(method, path, body, query);
+    return this.rawRequest<T>(method, path, body, query, undefined, extraHeaders);
   }
 
   private async rawRequest<T = unknown>(
@@ -57,6 +81,7 @@ export class PartnerApiClient {
     body?: unknown,
     query?: Record<string, string | undefined>,
     apiKey?: string,
+    extraHeaders?: Record<string, string>,
   ): Promise<T> {
     const url = new URL(path, this.baseUrl);
     if (query) {
@@ -68,6 +93,11 @@ export class PartnerApiClient {
     const headers: Record<string, string> = {};
     if (apiKey) headers['X-API-Key'] = apiKey;
     if (body) headers['Content-Type'] = 'application/json';
+    if (extraHeaders) {
+      for (const [key, value] of Object.entries(extraHeaders)) {
+        headers[key] = value;
+      }
+    }
 
     const res = await fetch(url.toString(), {
       method,
@@ -75,13 +105,123 @@ export class PartnerApiClient {
       ...(body ? { body: JSON.stringify(body) } : {}),
     });
 
-    const json = await res.json();
+    const text = await res.text();
+    let json: any = {};
+    if (text) {
+      try {
+        json = JSON.parse(text);
+      } catch {
+        json = { message: text };
+      }
+    }
+
     if (!res.ok) {
       const errMsg = json?.error?.message ?? json?.message ?? res.statusText;
-      throw new Error(`Partner API error (${res.status}): ${errMsg}`);
+      throw new PartnerApiHttpError(
+        res.status,
+        `Partner API error (${res.status}): ${errMsg}`,
+        json,
+        res.headers,
+      );
     }
 
     return json as T;
+  }
+
+  private async requestWithOptionalOveragePayment<T = unknown>(
+    method: string,
+    path: string,
+    body: unknown,
+    overagePayment?: ConversationOveragePaymentOpts,
+  ): Promise<T> {
+    try {
+      return await this.request<T>(method, path, body);
+    } catch (err) {
+      if (
+        !overagePayment?.enabled ||
+        !(err instanceof PartnerApiHttpError) ||
+        err.status !== 402
+      ) {
+        throw err;
+      }
+
+      const paymentHeader = this.buildOveragePaymentHeader(
+        err.body,
+        err.responseHeaders,
+        overagePayment,
+      );
+
+      return this.request<T>(method, path, body, undefined, {
+        'X-PAYMENT': paymentHeader,
+      });
+    }
+  }
+
+  private buildOveragePaymentHeader(
+    responseBody: any,
+    responseHeaders: Headers,
+    overagePayment: ConversationOveragePaymentOpts,
+  ) {
+    const preferredAsset = overagePayment.asset ?? 'USDC';
+    const details = responseBody?.error?.details ?? {};
+    const recipientFromBody: string | undefined = details?.recipient;
+    const recipient = recipientFromBody ?? responseHeaders.get('X-Payment-Recipient') ?? undefined;
+
+    const optionsFromBody: Array<{ asset?: string; amount?: number }> = Array.isArray(details?.options)
+      ? details.options
+      : [];
+    const optionsFromHeader = this.parsePaymentOptionsHeader(
+      responseHeaders.get('X-Payment-Options'),
+    );
+    const options =
+      optionsFromBody.length > 0 ? optionsFromBody : optionsFromHeader;
+
+    const normalizedAsset = preferredAsset.toUpperCase();
+    const selected =
+      options.find((option) => String(option.asset ?? '').toUpperCase() === normalizedAsset) ??
+      options[0];
+
+    if (!recipient || !selected?.asset || selected.amount === undefined) {
+      throw new Error(
+        'API returned 402 but did not provide payment requirements (recipient/options).',
+      );
+    }
+
+    const txSignature = overagePayment.txSignature?.trim();
+    if (!txSignature) {
+      throw new Error(
+        'Missing payment tx signature. Provide --payment-tx-signature when using --pay-overage.',
+      );
+    }
+
+    return JSON.stringify({
+      recipient,
+      asset: String(selected.asset).toUpperCase(),
+      amount: Number(selected.amount),
+      paymentId: this.createPaymentId(),
+      txSignature,
+    });
+  }
+
+  private parsePaymentOptionsHeader(value: string | null) {
+    if (!value) return [];
+    return value
+      .split(',')
+      .map((entry) => {
+        const [assetRaw, amountRaw] = entry.split(':');
+        const asset = assetRaw?.trim();
+        const amount = amountRaw ? Number(amountRaw.trim()) : Number.NaN;
+        if (!asset || !Number.isFinite(amount)) return null;
+        return { asset, amount };
+      })
+      .filter((item): item is { asset: string; amount: number } => item !== null);
+  }
+
+  private createPaymentId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return `pay_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
   }
 
   // ── Auth (public — no API key) ──────────────────────────────────
@@ -331,8 +471,14 @@ export class PartnerApiClient {
   createConversation(
     userId: string,
     body: { message: string; agentType?: string },
+    overagePayment?: ConversationOveragePaymentOpts,
   ) {
-    return this.request('POST', `/api/v1/users/${userId}/conversations`, body);
+    return this.requestWithOptionalOveragePayment(
+      'POST',
+      `/api/v1/users/${userId}/conversations`,
+      body,
+      overagePayment,
+    );
   }
 
   listConversations(userId: string, opts?: { page?: string; pageSize?: string }) {
@@ -350,11 +496,13 @@ export class PartnerApiClient {
     userId: string,
     conversationId: string,
     body: { message: string },
+    overagePayment?: ConversationOveragePaymentOpts,
   ) {
-    return this.request(
+    return this.requestWithOptionalOveragePayment(
       'POST',
       `/api/v1/users/${userId}/conversations/${conversationId}/messages`,
       body,
+      overagePayment,
     );
   }
 

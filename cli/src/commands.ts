@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { PartnerApiClient } from './client.js';
+import type { ConversationOverageAsset, PartnerApiClient } from './client.js';
 import type { MiloConfig } from './config.js';
 import { saveConfig } from './config.js';
 import { base58Decode, base58Encode } from './base58.js';
@@ -93,6 +93,28 @@ function validateOptionalPositiveInt(flagName: string, value: string | undefined
 export function validatePagingFlags(page: string | undefined, pageSize: string | undefined): void {
   validateOptionalPositiveInt('page', page, MAX_PAGE_VALUE);
   validateOptionalPositiveInt('page-size', pageSize, MAX_PAGE_SIZE_VALUE);
+}
+
+function parseConversationOverageAsset(value: string | undefined): ConversationOverageAsset {
+  const normalized = (value ?? 'USDC').toUpperCase();
+  if (normalized !== 'USDC' && normalized !== 'SOL') {
+    throw new Error('--payment-asset must be either USDC or SOL');
+  }
+  return normalized as ConversationOverageAsset;
+}
+
+function buildOveragePaymentOpts(flags: Record<string, string | undefined>) {
+  const raw = flags['pay-overage'];
+  if (raw === undefined || raw === 'false') return undefined;
+  const txSignature = flags['payment-tx-signature']?.trim();
+  if (!txSignature) {
+    throw new Error('--payment-tx-signature is required when --pay-overage is enabled');
+  }
+  return {
+    enabled: true,
+    asset: parseConversationOverageAsset(flags['payment-asset']),
+    txSignature,
+  };
 }
 
 // ── Commands ──────────────────────────────────────────────────────
@@ -595,6 +617,9 @@ export const COMMANDS: CommandDef[] = [
       { name: 'user-id', description: 'User ID (default: from config)' },
       { name: 'message', description: 'Initial message', required: true },
       { name: 'agent-type', description: 'market-analyst or auto-trader (default: market-analyst)' },
+      { name: 'pay-overage', description: 'Auto-pay write overage on 402 using server recipient/options and one-time paymentId (matches MCP create_conversation/send_message .payment fields; accepted retries return PAYMENT-RESPONSE) (default: false)' },
+      { name: 'payment-asset', description: 'Preferred overage asset when both are accepted: USDC (0.25) or SOL (0.01), default USDC' },
+      { name: 'payment-tx-signature', description: 'Confirmed Solana tx signature for payment to the 402 returned recipient wallet (required with --pay-overage)' },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
@@ -602,7 +627,7 @@ export const COMMANDS: CommandDef[] = [
         message: requireFlag(flags, 'message'),
       };
       if (flags['agent-type']) body.agentType = flags['agent-type'];
-      return client.createConversation(userId, body);
+      return client.createConversation(userId, body, buildOveragePaymentOpts(flags));
     },
   },
 
@@ -645,13 +670,16 @@ export const COMMANDS: CommandDef[] = [
       { name: 'conversation-id', description: 'Conversation ID', required: true },
       { name: 'message', description: 'Message text', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: 'pay-overage', description: 'Auto-pay write overage on 402 using server recipient/options and one-time paymentId (matches MCP create_conversation/send_message .payment fields; accepted retries return PAYMENT-RESPONSE) (default: false)' },
+      { name: 'payment-asset', description: 'Preferred overage asset when both are accepted: USDC (0.25) or SOL (0.01), default USDC' },
+      { name: 'payment-tx-signature', description: 'Confirmed Solana tx signature for payment to the 402 returned recipient wallet (required with --pay-overage)' },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
       const conversationId = requireFlag(flags, 'conversation-id');
       return client.sendMessage(userId, conversationId, {
         message: requireFlag(flags, 'message'),
-      });
+      }, buildOveragePaymentOpts(flags));
     },
   },
 

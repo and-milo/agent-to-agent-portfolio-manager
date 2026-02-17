@@ -64,6 +64,12 @@ The partner-api host also exposes MCP at `/mcp` using Streamable HTTP:
 
 `POST /mcp` initialize accepts optional `X-API-Key`. If omitted, the MCP session starts unauthenticated and only signup/public tools are usable until `signup` returns an API key. MCP paginated tools enforce `page <= 100` and `pageSize <= 100`. Caller IP is forwarded to downstream partner-api calls so signup/SIWX per-IP throttling remains per caller. Sessions are bounded with idle eviction, so clients should handle `429` on initialize and re-initialize after invalid-session errors. There is no server-side fallback key.
 
+MCP conversation overage note:
+- `create_conversation` and `send_message` over the free write quota (2/min per API key across conversations) return structured payment guidance when partner-api responds with `402 Payment Required`.
+- Accepted overage options are `0.25 USDC` or `0.01 SOL`, paid to `TREASURY_WALLET`.
+- Use the returned recipient (`paymentSupport.recipient` / `X-Payment-Recipient`).
+- MCP supports paid retry directly on `create_conversation` and `send_message` via `payment: { recipient, asset, amount, paymentId, txSignature }` (optional `payment.header`, default `X-PAYMENT`).
+
 ## Wallet & Deposits
 
 Milo creates a **non-custodial** Solana wallet for each user via Turnkey. The wallet-creating account is the owner; Milo receives delegated permission for trading.
@@ -1099,6 +1105,60 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/m
   -d '{ "message": "What about JUP?" }'
 ```
 
+#### Conversation Overage Payments
+
+Conversation write endpoints (`create` + `send message`) include **2 free writes per 60s** per API key (shared across conversations).
+When over the free quota, the API returns `402 Payment Required`.
+
+- Payment header: `X-PAYMENT`
+- Recipient wallet: `TREASURY_WALLET` (server environment variable)
+- Accepted overage prices:
+  - `0.25 USDC`
+  - `0.01 SOL`
+- Anti-replay: each paid overage request must include a unique one-time `paymentId` (reusing it is rejected).
+- On-chain verification: each paid request must include `txSignature` for a confirmed Solana transfer to `TREASURY_WALLET` with the matching asset+amount.
+
+**402 example response:**
+```json
+{
+  "error": {
+    "code": "payment_required",
+    "message": "Conversation write limit exceeded. Payment is required for overage messages.",
+    "details": {
+      "reason": "conversation_write_overage",
+      "acceptedHeader": "X-PAYMENT",
+      "recipient": "<TREASURY_WALLET>",
+      "options": [
+        { "asset": "USDC", "amount": 0.25 },
+        { "asset": "SOL", "amount": 0.01 }
+      ],
+      "freeTier": { "requests": 2, "windowSeconds": 60 },
+      "antiReplay": {
+        "required": true,
+        "oneTimeIdField": "paymentId",
+        "oneTimeTxField": "txSignature",
+        "scope": "api_key"
+      },
+      "onChainVerification": {
+        "required": true,
+        "chain": "solana",
+        "commitment": "confirmed",
+        "txField": "txSignature"
+      }
+    }
+  }
+}
+```
+
+**Paid retry example:**
+```bash
+curl -X POST {{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/messages \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "X-PAYMENT: {\"recipient\":\"<TREASURY_WALLET>\",\"asset\":\"USDC\",\"amount\":0.25,\"paymentId\":\"pay_001_unique\",\"txSignature\":\"<confirmed-solana-tx-signature>\"}" \
+  -d '{ "message": "Continue the analysis." }'
+```
+
 #### GET /api/v1/users/{userId}/conversations/{conversationId}/messages
 
 Poll for messages. Check `processing` flag to know if the agent is still working.
@@ -1249,7 +1309,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/diary-logs?page=1&pageSize=25" \
 | Auto-trade settings (write)                                     | 10    | 60s    |
 | Strategies (write: create, update, delete)                      | 10    | 60s    |
 | Strategies (read: list, get)                                    | 60    | 60s    |
-| Conversations (write: create, send message)                     | 2     | 60s    |
+| Conversations (write: create, send message)                     | 2 free then paid overage | 60s    |
 | Conversations (read: list, get, messages)                       | 30    | 60s    |
 | Arena write (deploy, withdraw)                                  | 5     | 60s    |
 | Arena read (leaderboard)                                        | 30    | 60s    |
@@ -1268,6 +1328,20 @@ Rate limit rejections return `429 Too Many Requests` with:
 - `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers
 
 Retry behavior: back off and retry only after `Retry-After` elapses.
+
+Conversation write overage returns `402 Payment Required` with:
+- `error.code = "payment_required"`
+- `X-Payment-Required: true`
+- `X-Payment-Header: X-PAYMENT`
+- `X-Payment-Recipient: <TREASURY_WALLET>`
+- `X-Payment-Options: USDC:0.25,SOL:0.01`
+- `X-Payment-Id-Field: paymentId` (one-time value required per paid request)
+- `X-Payment-Tx-Field: txSignature` (confirmed payment transaction signature)
+
+Successful paid overage retries (`2xx`) include:
+- `PAYMENT-RESPONSE: <base64-json-settlement>` (x402-style acceptance payload)
+- `X-PAYMENT-RESPONSE: <same-value>` (legacy mirror)
+- `X-Billing-Mode: payg`
 
 ## Pagination
 
@@ -1288,6 +1362,7 @@ Response includes `meta`:
 | ------ | ---------------- | ----------------------------------------------- |
 | 400    | `bad_request`    | Invalid input, missing fields, validation error |
 | 401    | `unauthorized`   | Missing or invalid API key                      |
+| 402    | `payment_required` | Conversation write overage requires payment    |
 | 404    | `not_found`      | Resource not found                              |
 | 409    | `error`          | Conflict (e.g., user already exists)            |
 | 429    | `rate_limit_exceeded` | Rate limit exceeded                        |
