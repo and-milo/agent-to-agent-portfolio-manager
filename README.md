@@ -325,6 +325,7 @@ minecraft didn't win by shipping every world. neither will we.
 | **skill**   | [skill.md](https://partners.andmilo.com/skill.md)              |
 | **X**       | [@MiloOnChains](https://x.com/MiloOnChains)                    |
 | **builder** | [@marooned_otc](https://x.com/marooned_otc)                    |
+| **builder** | [@swizardtoshi](https://x.com/swizardtoshi)                    |
 | **demo**    | [video](https://x.com/MiloOnChains/status/1932104052759838857) |
 
 ---
