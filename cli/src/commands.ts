@@ -741,7 +741,7 @@ export const COMMANDS: CommandDef[] = [
       { name: 'timeframe', description: 'Timeframe: 1d, 30d, 90d (default: 30d)' },
       { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
       { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
-      { name: 'sort-key', description: 'Sort by: pnl, winRate, returnPct, accountValue' },
+      { name: 'sort-key', description: 'Sort by: pnl, winRate (token-PnL: profitable tokens / tracked tokens * 100, excluding USDC), returnPct, accountValue' },
       { name: 'sort-direction', description: 'Sort direction: asc, desc' },
     ],
     handler: async (flags, client, config) => {

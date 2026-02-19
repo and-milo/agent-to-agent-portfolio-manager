@@ -735,6 +735,8 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/arena/leaderboard?timeframe=30d&page=1&
 | `sortKey` | string | `pnl`, `winRate`, `returnPct`, `accountValue` | — |
 | `sortDirection` | string | `asc`, `desc` | — |
 
+`winRate` is token-PnL based: `(number of tokens with positive token PnL / total tracked tokens) * 100`, excluding USDC.
+
 **Response (200):**
 ```json
 {

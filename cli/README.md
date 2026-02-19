@@ -179,6 +179,7 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 ./dist/milo deploy-arena --strategy-id <uuid>
 ./dist/milo arena-leaderboard --timeframe 30d --sort-key pnl --sort-direction desc
 ./dist/milo withdraw-arena --strategy-id <uuid>
+# winRate sort uses token-PnL win rate: profitable tokens / tracked tokens * 100 (USDC excluded)
 
 # Quests & Bones — fetch open quests (unlocked by default), claim bones, view balance
 ./dist/milo list-quests
