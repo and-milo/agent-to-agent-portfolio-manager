@@ -499,10 +499,12 @@ curl -X POST https://partners.andmilo.com/api/v1/wallets/{walletId}/orders \
     "tokenAddress": "So11111111111111111111111111111111111111112",
     "type": "buy",
     "status": "active",
+    "expiresAt": "2026-12-31T23:59:59.000Z",
     "payload": {
       "type": "buy",
       "amount": { "type": "absolute_usd", "amount": 50 },
-      "trigger": { "type": "absolute", "trigger": "price", "operator": "gte", "value": 0 }
+      "trigger": { "type": "absolute", "trigger": "price", "operator": "gte", "value": 0 },
+      "execution": {}
     },
     "takeProfits": [
       { "percentage": 50, "profitPercentage": 20 },
@@ -528,6 +530,7 @@ curl -X POST https://partners.andmilo.com/api/v1/wallets/{walletId}/orders \
 | `relative` | `rise`, `drop` | Trigger on % change from entry |
 
 Market order: `{ "type": "absolute", "trigger": "price", "operator": "gte", "value": 0 }`
+Market orders require `expiresAt`, and it must be within 120 minutes of the request time.
 
 **Take-profit / Stop-loss (optional):**
 

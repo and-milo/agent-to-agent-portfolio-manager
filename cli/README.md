@@ -100,6 +100,7 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
   - `stopLosses.length <= 5`
   - `takeProfits.length + stopLosses.length <= 8`
 - Page-based commands use API pagination caps: `page <= 100`, `pageSize <= 100`.
+- Market orders require `--expires-at`, and that timestamp must be within 120 minutes of the request time.
 - API throttles to account for in automation:
   - `POST /api/v1/wallets/{walletId}/orders`: `5/min`
   - `POST /api/v1/users/{userId}/positions/close-all`: `1/min`
