@@ -60,6 +60,8 @@ Common macOS path:
 
 - MCP `POST /mcp` initialize can start without `X-API-Key` for signup bootstrap.
 - After signup, use returned API key for authenticated tools.
+- Initialize is subject to throttling and session-capacity protections, so clients should handle `429` and respect `Retry-After` before retrying.
+- Sessions can expire after idle periods or under load; re-initialize after invalid-session errors.
 - Conversation write overage supports x402-style payment flow (`402 Payment Required` challenge + payment proof on retry).
 
 ## Quick Verify

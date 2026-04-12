@@ -46,6 +46,21 @@ const MAX_PAGE_SIZE_VALUE = 100;
 const MAX_TAKE_PROFITS = 5;
 const MAX_STOP_LOSSES = 5;
 const MAX_TOTAL_DEPENDANTS = 8;
+export const PARTNER_CANONICAL_MODEL_VERSIONS = [
+  'o3',
+  'gemini-3-pro',
+  'gemini-3.1-pro-preview',
+  'gpt-5.2-high',
+  'gpt-5.2-xh',
+  'gpt-5.4',
+  'grok-4.1-fast-reasoning',
+  'grok-4',
+  'claude-opus-4.5',
+  'claude-opus-4.6',
+] as const;
+const PARTNER_CANONICAL_MODEL_VERSION_SET = new Set<string>(
+  PARTNER_CANONICAL_MODEL_VERSIONS,
+);
 
 function parseOptionalJsonArray(value: unknown, flagName: string): unknown[] | undefined {
   if (value === undefined) return undefined;
@@ -117,14 +132,33 @@ function buildOveragePaymentOpts(flags: Record<string, string | undefined>) {
   };
 }
 
+export function parseModelVersionFlag(
+  value: string | undefined,
+): string | null | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error('--model-version cannot be empty');
+  }
+  if (trimmed.toLowerCase() === 'null') return null;
+  if (!PARTNER_CANONICAL_MODEL_VERSION_SET.has(trimmed)) {
+    throw new Error(
+      `--model-version must be one of: ${PARTNER_CANONICAL_MODEL_VERSIONS.join(', ')}, or "null"`,
+    );
+  }
+  return trimmed;
+}
+
 // ── Commands ──────────────────────────────────────────────────────
 
+// Partner MCP note: initialize can return 429 under bursty traffic or high load.
 export const COMMANDS: CommandDef[] = [
   // ── Signup ────────────────────────────────────────────────────
 
   {
     name: 'signup',
-    description: 'Register a new user via SIWX wallet verification (auto-signs with --secret-key)',
+    description:
+      'Register a new user via SIWX wallet verification (auto-signs with --secret-key)',
     flags: [
       { name: 'wallet-address', description: 'Solana wallet address', required: true },
       { name: 'secret-key', description: 'Base58-encoded ed25519 secret key (or MILO_SECRET_KEY env)' },
@@ -289,7 +323,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'close-all-positions',
-    description: 'Close all active and pending positions (API limit: 1 request/min)',
+    description: 'Close all active and pending positions',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
     ],
@@ -303,17 +337,27 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'create-order',
-    description: 'Create a buy or sell order with optional TP/SL (API limit: 5 requests/min)',
+    description:
+      'Create a buy or sell order with optional TP/SL; validation errors may include error.details.validationIssues',
     flags: [
       { name: 'wallet-id', description: 'Wallet ID (default: from config)' },
       { name: 'token-address', description: 'Token mint address', required: true },
       { name: 'type', description: 'buy or sell', required: true },
-      { name: 'payload-json', description: 'Order payload JSON (amount, trigger, execution)', required: true },
+      {
+        name: 'payload-json',
+        description:
+          'Order payload JSON (amount, trigger, execution); schema errors can include error.details.validationIssues',
+        required: true,
+      },
       { name: 'status', description: 'active or draft (default: active)' },
       { name: 'position-thesis-id', description: 'Link to a position thesis' },
       { name: 'take-profits-json', description: `Take-profit ladder JSON array (max ${MAX_TAKE_PROFITS})` },
       { name: 'stop-losses-json', description: `Stop-loss ladder JSON array (max ${MAX_STOP_LOSSES})` },
-      { name: 'expires-at', description: 'Expiration time (ISO 8601)' },
+      {
+        name: 'expires-at',
+        description:
+          'Expiration time (ISO 8601; required for market orders and must be within 120 minutes)',
+      },
     ],
     handler: async (flags, client, config) => {
       const walletId = requireFlag(flags, 'wallet-id', config.wallet_id);
@@ -418,7 +462,8 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'send-tokens',
-    description: 'Send tokens from your Milo wallet',
+    description:
+      'Send tokens from your Milo wallet (wallet-id path value is authoritative)',
     flags: [
       { name: 'wallet-id', description: 'Wallet ID (default: from config)' },
       { name: 'recipient', description: 'Recipient Solana address', required: true },
@@ -458,9 +503,23 @@ export const COMMANDS: CommandDef[] = [
       { name: 'risk-tolerance', description: 'conservative, balanced, or degen' },
       { name: 'strategy', description: 'VALUE INVESTOR, SWING TRADER, SCALPER, or CUSTOM' },
       { name: 'strategy-id', description: 'Link to a saved strategy (UUID)' },
+      {
+        name: 'model-version',
+        description: `Preferred model (or "null" to clear). Only canonical public ids are accepted: ${PARTNER_CANONICAL_MODEL_VERSIONS.join(', ')}. If unavailable for the account, the API returns 400 with a plan-specific Stripe upgrade link.`,
+      },
       { name: 'instructions', description: 'Free-text trading instructions' },
       { name: 'allocation-json', description: 'Asset class allocation JSON (e.g. \'{"majors":40,"memes":20}\')' },
       { name: 'custom-tickers-json', description: 'Custom tickers JSON array (e.g. \'["SOL","JUP"]\')' },
+      {
+        name: 'data-sources-json',
+        description:
+          'Global data-source settings JSON (or "null" to clear). Supported keys: fundingRates, openInterest, liquidationData, macroData. Only Pro and Max can change these settings.',
+      },
+      {
+        name: 'asset-class-settings-json',
+        description:
+          'Per-asset-class settings JSON (or "null" to clear), including nested dataSources overrides.',
+      },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
@@ -469,11 +528,22 @@ export const COMMANDS: CommandDef[] = [
       if (flags['risk-tolerance']) body.riskTolerance = flags['risk-tolerance'];
       if (flags['strategy']) body.strategy = flags['strategy'];
       if (flags['strategy-id']) body.strategyId = flags['strategy-id'];
+      const modelVersion = parseModelVersionFlag(flags['model-version']);
+      if (modelVersion !== undefined) body.modelVersion = modelVersion;
       if (flags['instructions']) body.instructions = flags['instructions'];
       const allocation = parseJson(flags['allocation-json'], 'allocation-json');
       if (allocation) body.allocation = allocation;
       const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
       if (tickers) body.customTickers = tickers;
+      if (flags['data-sources-json'] !== undefined) {
+        body.dataSources = parseJson(flags['data-sources-json'], 'data-sources-json');
+      }
+      if (flags['asset-class-settings-json'] !== undefined) {
+        body.assetClassSettings = parseJson(
+          flags['asset-class-settings-json'],
+          'asset-class-settings-json',
+        );
+      }
       if (Object.keys(body).length === 0) {
         throw new Error('At least one setting flag must be provided');
       }
@@ -530,6 +600,16 @@ export const COMMANDS: CommandDef[] = [
       { name: 'instructions', description: 'Trading instructions for the agent' },
       { name: 'allocation-json', description: 'Asset class allocation JSON' },
       { name: 'custom-tickers-json', description: 'Custom tickers JSON array' },
+      {
+        name: 'data-sources-json',
+        description:
+          'Global data-source settings JSON. Supported keys: fundingRates, openInterest, liquidationData, macroData. Only Pro and Max can change these settings.',
+      },
+      {
+        name: 'asset-class-settings-json',
+        description:
+          'Per-asset-class settings JSON, including nested dataSources overrides.',
+      },
       { name: 'is-public', description: 'Make publicly discoverable (true/false)' },
     ],
     handler: async (flags, client, config) => {
@@ -544,6 +624,15 @@ export const COMMANDS: CommandDef[] = [
       if (allocation) body.allocation = allocation;
       const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
       if (tickers) body.customTickers = tickers;
+      if (flags['data-sources-json'] !== undefined) {
+        body.dataSources = parseJson(flags['data-sources-json'], 'data-sources-json');
+      }
+      if (flags['asset-class-settings-json'] !== undefined) {
+        body.assetClassSettings = parseJson(
+          flags['asset-class-settings-json'],
+          'asset-class-settings-json',
+        );
+      }
       if (flags['is-public'] !== undefined) body.isPublic = flags['is-public'] === 'true';
       return client.createStrategy(userId, body);
     },
@@ -561,6 +650,16 @@ export const COMMANDS: CommandDef[] = [
       { name: 'instructions', description: 'Trading instructions' },
       { name: 'allocation-json', description: 'Asset class allocation JSON' },
       { name: 'custom-tickers-json', description: 'Custom tickers JSON array' },
+      {
+        name: 'data-sources-json',
+        description:
+          'Global data-source settings JSON (or "null" to clear). Supported keys: fundingRates, openInterest, liquidationData, macroData. Only Pro and Max can change these settings.',
+      },
+      {
+        name: 'asset-class-settings-json',
+        description:
+          'Per-asset-class settings JSON (or "null" to clear), including nested dataSources overrides.',
+      },
       { name: 'is-public', description: 'Make public (true/false)' },
     ],
     handler: async (flags, client, config) => {
@@ -575,6 +674,15 @@ export const COMMANDS: CommandDef[] = [
       if (allocation) body.allocation = allocation;
       const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
       if (tickers) body.customTickers = tickers;
+      if (flags['data-sources-json'] !== undefined) {
+        body.dataSources = parseJson(flags['data-sources-json'], 'data-sources-json');
+      }
+      if (flags['asset-class-settings-json'] !== undefined) {
+        body.assetClassSettings = parseJson(
+          flags['asset-class-settings-json'],
+          'asset-class-settings-json',
+        );
+      }
       if (flags['is-public'] !== undefined) body.isPublic = flags['is-public'] === 'true';
       return client.updateStrategy(userId, strategyId, body);
     },
@@ -617,9 +725,9 @@ export const COMMANDS: CommandDef[] = [
       { name: 'user-id', description: 'User ID (default: from config)' },
       { name: 'message', description: 'Initial message', required: true },
       { name: 'agent-type', description: 'market-analyst or auto-trader (default: market-analyst)' },
-      { name: 'pay-overage', description: 'Auto-pay write overage on 402 using server recipient/options and one-time paymentId (matches MCP create_conversation/send_message .payment fields; accepted retries return PAYMENT-RESPONSE) (default: false)' },
-      { name: 'payment-asset', description: 'Preferred overage asset when both are accepted: USDC (0.25) or SOL (0.01), default USDC' },
-      { name: 'payment-tx-signature', description: 'Confirmed Solana tx signature for payment to the 402 returned recipient wallet (required with --pay-overage)' },
+      { name: 'pay-overage', description: 'Legacy conversation-write retry helper (default: false)' },
+      { name: 'payment-asset', description: 'Asset hint for --pay-overage legacy flow: USDC or SOL (default: USDC)' },
+      { name: 'payment-tx-signature', description: 'Transaction signature used by --pay-overage legacy flow (required with --pay-overage)' },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
@@ -670,9 +778,9 @@ export const COMMANDS: CommandDef[] = [
       { name: 'conversation-id', description: 'Conversation ID', required: true },
       { name: 'message', description: 'Message text', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'pay-overage', description: 'Auto-pay write overage on 402 using server recipient/options and one-time paymentId (matches MCP create_conversation/send_message .payment fields; accepted retries return PAYMENT-RESPONSE) (default: false)' },
-      { name: 'payment-asset', description: 'Preferred overage asset when both are accepted: USDC (0.25) or SOL (0.01), default USDC' },
-      { name: 'payment-tx-signature', description: 'Confirmed Solana tx signature for payment to the 402 returned recipient wallet (required with --pay-overage)' },
+      { name: 'pay-overage', description: 'Legacy conversation-write retry helper (default: false)' },
+      { name: 'payment-asset', description: 'Asset hint for --pay-overage legacy flow: USDC or SOL (default: USDC)' },
+      { name: 'payment-tx-signature', description: 'Transaction signature used by --pay-overage legacy flow (required with --pay-overage)' },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);

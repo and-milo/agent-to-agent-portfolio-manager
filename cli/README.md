@@ -19,8 +19,7 @@ The build produces `dist/milo` — a self-contained executable.
 ## MCP Endpoint
 
 The same partner-api server exposes MCP on `/mcp` (Streamable HTTP).  
-`POST /mcp` initialize accepts optional `X-API-Key`; without it, MCP is limited to signup/public tools until `signup` returns an API key. MCP paginated tools enforce `page <= 100` and `pageSize <= 100`. Caller IP is forwarded to downstream partner-api calls so signup/SIWX per-IP throttling remains per caller. Sessions are bounded with idle eviction; handle possible `429` on initialize and re-initialize after invalid-session errors. No server-side fallback key is used.  
-For conversation write overage, MCP `create_conversation` and `send_message` return structured `402` payment guidance: pay `0.25 USDC` or `0.01 SOL` to the `TREASURY_WALLET` recipient returned in `X-Payment-Recipient` / `paymentSupport.recipient`. MCP paid retry is supported directly via `.payment` (`recipient`, `asset`, `amount`, `paymentId`, `txSignature`, optional `header`).  
+`POST /mcp` initialize accepts optional `X-API-Key`; without it, MCP is limited to signup/public tools until `signup` returns an API key. Throttling and session-capacity protections are enforced, so initialize can return `429`. Respect `Retry-After` before retrying and re-initialize after invalid-session errors.  
 This CLI continues to use the REST endpoints directly.
 
 ## Authentication
@@ -63,8 +62,8 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `executed-transactions` | Get executed (order-linked) transactions |
 | `list-positions` | List investment positions with PnL |
 | `close-position` | Close a position |
-| `close-all-positions` | Close all positions (API limit: 1 request/min) |
-| `create-order` | Create a buy/sell order with optional TP/SL (API limit: 5 requests/min) |
+| `close-all-positions` | Close all positions |
+| `create-order` | Create a buy/sell order with optional TP/SL |
 | `list-orders` | List orders with filters |
 | `get-order` | Get order details |
 | `pause-order` | Pause an active order |
@@ -100,23 +99,25 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
   - `stopLosses.length <= 5`
   - `takeProfits.length + stopLosses.length <= 8`
 - Page-based commands use API pagination caps: `page <= 100`, `pageSize <= 100`.
+- Public and authenticated endpoints are throttled by route and request context. Respect `Retry-After` on `429`.
+- For wallet-scoped write endpoints, if a JSON body includes `walletId`, it must match the `{walletId}` path parameter.
 - Market orders require `--expires-at`, and that timestamp must be within 120 minutes of the request time.
-- API throttles to account for in automation:
-  - `POST /api/v1/wallets/{walletId}/orders`: `5/min`
-  - `POST /api/v1/users/{userId}/positions/close-all`: `1/min`
-- Conversation writes are `2/min` free (`create-conversation`, `send-message`) across conversations for the same API key.
-- When conversation write overage occurs, API returns `402 Payment Required` with payment requirements.
-  - Recipient is `TREASURY_WALLET`.
-  - Accepted prices are `0.25 USDC` or `0.01 SOL` per extra message.
-  - CLI reads payment requirements from the `402` response (`error.details` and `X-Payment-*` headers) and builds `X-PAYMENT` for the retry.
-  - Anti-replay is enforced: each paid request needs a unique one-time `paymentId` in `X-PAYMENT`.
-  - On-chain verification is enforced: each paid request needs `txSignature` for a confirmed matching transfer.
-  - On accepted paid retries, API returns `PAYMENT-RESPONSE` (and legacy `X-PAYMENT-RESPONSE`) plus `X-Billing-Mode: payg`.
-  - CLI auto-generates `paymentId` when `--pay-overage` is used.
-  - Provide `--payment-tx-signature <signature>` when using `--pay-overage`.
-  - CLI does not broadcast payment transactions; submit the payment on-chain first, then pass its signature.
-  - Use `--pay-overage` to auto-retry with a valid `X-PAYMENT` payload.
-  - Use `--payment-asset USDC|SOL` to pick payment asset (default `USDC`).
+- Schema validation failures return `400 bad_request` and may include `error.details.validationIssues[]` entries with `{ target, path, code, message }`.
+- `update-settings --model-version ...` requires model access.
+  - Only canonical public ids are accepted on the partner surface.
+  - Unsupported or unavailable model selection returns `400 Bad Request`.
+  - If the model is outside the account tier, the error includes `error.details.requiredPlan`, `error.details.upgradeUrl`, and the same plan-specific Stripe link in the error message.
+  - Use `--model-version null` to clear preferred model.
+  - OpenAI canonical model ids are `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
+  - Anthropic canonical model ids are `claude-opus-4.5` and `claude-opus-4.6`.
+  - Gemini canonical model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
+  - Grok canonical model ids are `grok-4.1-fast-reasoning` and `grok-4`.
+- `update-settings`, `create-strategy`, `update-strategy`, and `sync-strategy` enforce `dataSources` entitlement.
+  - Supported data-source keys are `fundingRates`, `openInterest`, `liquidationData`, and `macroData`.
+  - Only Pro and Max can change `dataSources`, or sync a strategy that already contains them.
+  - Use `--data-sources-json` for global toggles and `--asset-class-settings-json` for per-asset overrides.
+  - Use `--data-sources-json null` or `--asset-class-settings-json null` on update endpoints to clear saved values.
+- Some write-heavy commands are more likely to receive `429` during bursts (for example order creation, close-all positions, and conversation writes). Build retries with backoff.
 - On `429`, respect `Retry-After` and retry only after that delay.
 
 ## Examples
@@ -148,27 +149,23 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
   --is-active true \
   --risk-tolerance balanced \
   --strategy "SWING TRADER" \
+  --model-version claude-opus-4.5 \
   --allocation-json '{"majors":40,"memes":20,"stables":30,"native":10}'
+
+# Add paid data-source settings with per-asset overrides
+./dist/milo update-settings \
+  --data-sources-json '{"fundingRates":true,"openInterest":true}' \
+  --asset-class-settings-json '{"memes":{"dataSources":{"liquidationData":true}},"majors":{"dataSources":{"macroData":true}}}'
+
+# Clear preferred model (revert to entitlement-based/default resolution)
+./dist/milo update-settings --model-version null
+
+# Clear saved data-source settings
+./dist/milo update-settings --data-sources-json null
 
 # Conversations with Milo AI
 ./dist/milo create-conversation --message "Analyze SOL price action" --agent-type market-analyst
 ./dist/milo get-messages --conversation-id <uuid>
-
-# Auto-pay conversation overage (if 402 is returned)
-# API will require payment to TREASURY_WALLET at either 0.25 USDC or 0.01 SOL
-./dist/milo create-conversation \
-  --message "Give me a rapid market update" \
-  --agent-type market-analyst \
-  --pay-overage \
-  --payment-asset USDC \
-  --payment-tx-signature <confirmed-solana-tx-signature>
-
-./dist/milo send-message \
-  --conversation-id <uuid> \
-  --message "Continue with risk analysis" \
-  --pay-overage \
-  --payment-asset SOL \
-  --payment-tx-signature <confirmed-solana-tx-signature>
 
 # Send tokens
 ./dist/milo send-tokens \

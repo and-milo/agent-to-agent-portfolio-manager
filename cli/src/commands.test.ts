@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { validateCreateOrderDependants, validatePagingFlags } from './commands.js';
+import {
+  parseModelVersionFlag,
+  validateCreateOrderDependants,
+  validatePagingFlags,
+} from './commands.js';
 
 function makeArray(size: number) {
   return Array.from({ length: size }, (_, i) => ({ index: i }));
@@ -64,5 +68,21 @@ test('rejects non-integer paging values', () => {
   assert.throws(
     () => validatePagingFlags('1.5', '10'),
     /--page must be a positive integer/,
+  );
+});
+
+test('accepts canonical partner model ids', () => {
+  assert.equal(parseModelVersionFlag('gpt-5.2-high'), 'gpt-5.2-high');
+  assert.equal(parseModelVersionFlag('gpt-5.4'), 'gpt-5.4');
+});
+
+test('accepts null model version sentinel', () => {
+  assert.equal(parseModelVersionFlag('null'), null);
+});
+
+test('rejects internal model aliases', () => {
+  assert.throws(
+    () => parseModelVersionFlag('milo-pro'),
+    /--model-version must be one of:/,
   );
 });

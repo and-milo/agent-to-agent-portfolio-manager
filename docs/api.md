@@ -30,15 +30,9 @@ Notes:
 - `POST /mcp` initialize accepts optional `X-API-Key`.
 - If omitted, the session starts unauthenticated and only signup/public MCP tools are usable until `signup` returns an API key.
 - MCP tools that forward paginated endpoints enforce `page <= 100` and `pageSize <= 100`.
-- MCP forwards caller IP to downstream partner-api calls so signup/SIWX per-IP throttling remains per caller.
-- MCP sessions are bounded and idle sessions are evicted; initialize may return `429` under saturation.
+- Abuse protections and request throttling are enforced. Initialize may return `429` during high load.
+- MCP sessions are bounded and idle sessions can be evicted; if a session expires, re-initialize.
 - If a session expires, sessioned calls return invalid-session errors and the client should re-initialize.
-- There is no server-side API-key fallback for MCP sessions.
-- MCP `create_conversation` and `send_message` surface conversation-write overage (`402 Payment Required`) as structured payment guidance (`paymentSupport`) and support optional `payment` input to attach proof on retry.
-- Overage payment options are `0.25 USDC` or `0.01 SOL` to `TREASURY_WALLET` (recipient address is returned in `paymentSupport.recipient` / `X-Payment-Recipient`).
-- Retry using MCP `create_conversation` or `send_message` with:
-  - `payment.recipient`, `payment.asset`, `payment.amount`, `payment.paymentId`, `payment.txSignature`
-  - optional `payment.header` (default `X-PAYMENT`)
 
 Client setup examples (OpenAI Codex + Claude Desktop): see `docs/mcp.md`.
 
@@ -203,7 +197,12 @@ curl -X PATCH https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-sett
     "strategy": "SWING TRADER",
     "instructions": "Focus on SOL ecosystem tokens",
     "customTickers": ["SOL", "JUP", "BONK"],
-    "allocation": { "majors": 40, "native": 30, "memes": 20, "stables": 10 }
+    "allocation": { "majors": 40, "native": 30, "memes": 20, "stables": 10 },
+    "dataSources": { "fundingRates": true, "openInterest": true },
+    "assetClassSettings": {
+      "memes": { "dataSources": { "liquidationData": true } },
+      "majors": { "dataSources": { "macroData": true } }
+    }
   }'
 ```
 
@@ -213,13 +212,36 @@ curl -X PATCH https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-sett
 | `riskTolerance` | string | `conservative`, `balanced`, `degen` |
 | `strategy` | string | `VALUE INVESTOR`, `SWING TRADER`, `SCALPER`, `CUSTOM` |
 | `strategyId` | uuid \| null | Link a saved strategy |
+| `modelVersion` | string \| null | Preferred model for autotrade decisions |
 | `instructions` | string | Free-text trading instructions |
 | `customTickers` | string[] | Tokens to focus on |
 | `allocation` | object | Asset class percentages |
+| `dataSources` | object \| null | Global data-source toggles: `fundingRates`, `openInterest`, `liquidationData`, `macroData` |
+| `assetClassSettings` | object \| null | Per-asset-class configuration, including nested `dataSources` overrides |
 
 **Asset classes:** `trenches`, `memes`, `promising-memes`, `staking`, `native`, `majors`, `stables`, `xStocks`, `custom`
 
 `isActive` can only be set to `true` if the Milo wallet holds at least 1 SOL.
+
+Data-source resolution notes:
+- Asset-class `dataSources` overrides win over top-level `dataSources`.
+- If no override exists, the top-level value applies.
+- Missing keys are treated as disabled.
+- PATCH deep-merges `dataSources` both globally and inside `assetClassSettings`, so partial updates do not wipe sibling keys.
+
+Model entitlement notes:
+- Only canonical model ids are accepted on the partner surface.
+- Canonical OpenAI model ids are `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
+- Canonical Anthropic model ids are `claude-opus-4.5` and `claude-opus-4.6`.
+- Canonical Gemini model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
+- Canonical Grok model ids are `grok-4.1-fast-reasoning` and `grok-4`.
+- If a model is unavailable for your account, the API returns `400 Bad Request` with `error.details.requiredPlan`, `error.details.upgradeUrl`, and an error message containing the same plan-specific Stripe link.
+
+Data-source entitlement notes:
+- Only `pro` and `max` users can create, update, apply, sync, or otherwise change `dataSources`.
+- Free users can still read saved `dataSources` in GET responses.
+- If an account downgrades, saved `dataSources` remain visible but are inactive in auto-trader chat, execution, and position review until the account is back on Pro or Max.
+- When blocked, the API returns `400 Bad Request` with `error.details.feature = "dataSources"`, `error.details.requiredPlan = "pro"`, and upgrade details when available.
 
 ---
 
@@ -242,6 +264,11 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-setti
     "instructions": "Focus on SOL, JUP, and BONK",
     "allocation": { "majors": 45, "native": 25, "staking": 10, "promising-memes": 15, "xStocks": 5 },
     "customTickers": ["SOL", "JUP", "BONK"],
+    "dataSources": { "fundingRates": true, "openInterest": true },
+    "assetClassSettings": {
+      "memes": { "dataSources": { "liquidationData": true } },
+      "majors": { "dataSources": { "macroData": true } }
+    },
     "isPublic": false
   }'
 ```
@@ -254,7 +281,11 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-setti
 | `instructions` | string | no | Free-text instructions (max 4000 chars) |
 | `allocation` | object | no | Asset class percentages |
 | `customTickers` | string[] | no | Token tickers to focus on |
+| `dataSources` | object \| null | no | Global data-source toggles carried into the strategy snapshot |
+| `assetClassSettings` | object \| null | no | Per-asset-class configuration, including nested `dataSources` |
 | `isPublic` | boolean | no | Make publicly discoverable |
+
+The same Pro/Max restriction applies when creating or updating a strategy with `dataSources`, and when syncing a linked strategy that already contains them.
 
 #### List Strategies
 
@@ -630,6 +661,7 @@ curl -X POST https://partners.andmilo.com/api/v1/wallets/{walletId}/actions/send
 | `amount` | number | Amount in human-readable units (e.g. 1.5 SOL) |
 
 For native SOL use mint: `So11111111111111111111111111111111111111112`
+If a JSON body includes `walletId`, it must match the `{walletId}` path parameter.
 
 **Response (202):**
 ```json
@@ -700,60 +732,6 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/conversations/{c
   -H "X-API-Key: $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "message": "What about JUP?" }'
-```
-
-#### Conversation Overage Payments
-
-Conversation write endpoints (`create` + `send message`) include **2 free writes per 60s** per API key (shared across conversations).  
-When over the free quota, the API returns `402 Payment Required`.
-
-- Payment header: `X-PAYMENT`
-- Recipient wallet: `TREASURY_WALLET` (server environment variable)
-- Accepted overage prices:
-  - `0.25 USDC`
-  - `0.01 SOL`
-- Anti-replay: each paid overage request must include a unique one-time `paymentId` (reusing it is rejected).
-- On-chain verification: each paid request must include `txSignature` for a confirmed Solana transfer to `TREASURY_WALLET` with the matching asset+amount.
-
-**402 example response:**
-```json
-{
-  "error": {
-    "code": "payment_required",
-    "message": "Conversation write limit exceeded. Payment is required for overage messages.",
-    "details": {
-      "reason": "conversation_write_overage",
-      "acceptedHeader": "X-PAYMENT",
-      "recipient": "<TREASURY_WALLET>",
-      "options": [
-        { "asset": "USDC", "amount": 0.25 },
-        { "asset": "SOL", "amount": 0.01 }
-      ],
-      "freeTier": { "requests": 2, "windowSeconds": 60 },
-      "antiReplay": {
-        "required": true,
-        "oneTimeIdField": "paymentId",
-        "oneTimeTxField": "txSignature",
-        "scope": "api_key"
-      },
-      "onChainVerification": {
-        "required": true,
-        "chain": "solana",
-        "commitment": "confirmed",
-        "txField": "txSignature"
-      }
-    }
-  }
-}
-```
-
-**Paid retry example:**
-```bash
-curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/conversations/{conversationId}/messages \
-  -H "X-API-Key: $API_KEY" \
-  -H "Content-Type: application/json" \
-  -H "X-PAYMENT: {\"recipient\":\"<TREASURY_WALLET>\",\"asset\":\"USDC\",\"amount\":0.25,\"paymentId\":\"pay_001_unique\",\"txSignature\":\"<confirmed-solana-tx-signature>\"}" \
-  -d '{ "message": "Continue the analysis." }'
 ```
 
 #### Get Messages
@@ -961,28 +939,7 @@ Transactions and executed transactions use **cursor-based** pagination with `lim
 
 ## Rate Limits
 
-| Endpoint Group | Limit | Window |
-|----------------|-------|--------|
-| Signup (per IP) | 5 | 60s |
-| Signup (per wallet) | 1 | 60s |
-| SIWX message (per IP) | 5 | 60s |
-| Me (`GET /api/v1/me`) | 60 | 60s |
-| Portfolio reads (holdings, transactions, positions, diary-logs) | 60 | 60s |
-| Auto-trade settings (write) | 10 | 60s |
-| Strategies (write) | 10 | 60s |
-| Strategies (read) | 60 | 60s |
-| Conversations (write: create, send message) | 2 free then paid overage | 60s |
-| Conversations (read) | 30 | 60s |
-| Arena write (deploy, withdraw) | 5 | 60s |
-| Arena read (leaderboard) | 30 | 60s |
-| Quests read (list, bones balance) | 60 | 60s |
-| Quests write (claim) | 10 | 60s |
-| Wallet actions | 10 | 60s |
-| Orders create (`POST /wallets/{walletId}/orders`) | 5 | 60s |
-| Orders write (`pause`, `activate`, `delete`) | 10 | 60s |
-| Orders (read) | 60 | 60s |
-| Position close | 10 | 60s |
-| Position close-all (`POST /users/{userId}/positions/close-all`) | 1 | 60s |
+Rate limits are enforced across endpoints. Limits vary by endpoint and request context.
 
 Rate limit rejections return `429 Too Many Requests` with:
 - `error.code = "rate_limit_exceeded"`
@@ -991,27 +948,41 @@ Rate limit rejections return `429 Too Many Requests` with:
 
 Retry behavior: wait for `Retry-After` before retrying.
 
-Conversation write overage returns `402 Payment Required` with:
-- `error.code = "payment_required"`
-- `X-Payment-Required: true`
-- `X-Payment-Header: X-PAYMENT`
-- `X-Payment-Recipient: <TREASURY_WALLET>`
-- `X-Payment-Options: USDC:0.25,SOL:0.01`
-- `X-Payment-Id-Field: paymentId` (one-time value required per paid request)
-- `X-Payment-Tx-Field: txSignature` (confirmed payment transaction signature)
-
-Successful paid overage retries (`2xx`) include:
-- `PAYMENT-RESPONSE: <base64-json-settlement>` (x402-style acceptance payload)
-- `X-PAYMENT-RESPONSE: <same-value>` (legacy mirror)
-- `X-Billing-Mode: payg`
-
 ## Error Handling
 
 ```json
 {
   "error": {
     "code": "bad_request",
-    "message": "Description of the error"
+    "message": "Model \"gpt-5.2-high\" requires a Pro plan. Upgrade here: https://buy.stripe.com/...",
+    "details": {
+      "requestedModelVersion": "gpt-5.2-high",
+      "requiredPlan": "pro",
+      "requiredPlanLabel": "Pro",
+      "upgradeUrl": "https://buy.stripe.com/...",
+      "upgradeText": "Upgrade to Pro to use model \"gpt-5.2-high\"."
+    }
+  }
+}
+```
+
+Schema validation failures also return `400 bad_request`, with `error.details.validationIssues` as a field-level issue list:
+
+```json
+{
+  "error": {
+    "code": "bad_request",
+    "message": "Missing required field: expiresAt",
+    "details": {
+      "validationIssues": [
+        {
+          "target": "json",
+          "path": "expiresAt",
+          "code": "invalid_type",
+          "message": "Required"
+        }
+      ]
+    }
   }
 }
 ```
@@ -1020,7 +991,6 @@ Successful paid overage retries (`2xx`) include:
 |--------|------|-------------|
 | 400 | `bad_request` | Invalid input or validation error |
 | 401 | `unauthorized` | Missing or invalid API key |
-| 402 | `payment_required` | Conversation write overage requires payment |
 | 404 | `not_found` | Resource not found |
 | 409 | `error` | Conflict (e.g. wallet already registered) |
 | 429 | `rate_limit_exceeded` | Rate limit exceeded |
