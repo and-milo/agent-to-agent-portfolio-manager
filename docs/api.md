@@ -4,6 +4,8 @@
 
 HTTP API for external partners to manage users, wallets, trading, and AI conversations on Milo. All endpoints are versioned under `/api/v1` and require an API key (except signup).
 
+Trading execution note: swap quotes now come from DFlow and signed swap transactions are submitted through Helius Sender. The partner-facing request and response shapes remain unchanged.
+
 Need an API key? [Contact us on Discord](https://discord.com/invite/join-milo)
 
 ## Authentication
@@ -25,6 +27,7 @@ The same server also exposes an MCP Streamable HTTP endpoint at:
 - `DELETE /mcp` (terminate a session)
 
 Notes:
+
 - Use `Mcp-Session-Id` for sessioned requests after initialization.
 - `Accept` should include `application/json` and `text/event-stream` for POST.
 - `POST /mcp` initialize accepts optional `X-API-Key`.
@@ -62,6 +65,7 @@ curl https://partners.andmilo.com/api/v1/me \
 ```
 
 **Response:**
+
 ```json
 {
   "user": {
@@ -96,13 +100,14 @@ curl -X POST https://partners.andmilo.com/api/v1/users/siwx/message \
   }'
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `accountAddress` | string | yes | Solana wallet address (32-64 chars) |
-| `chainId` | string | yes | CAIP-2 chain ID |
-| `inviteCode` | string | no | Optional invite code |
+| Field            | Type   | Required | Description                         |
+| ---------------- | ------ | -------- | ----------------------------------- |
+| `accountAddress` | string | yes      | Solana wallet address (32-64 chars) |
+| `chainId`        | string | yes      | CAIP-2 chain ID                     |
+| `inviteCode`     | string | no       | Optional invite code                |
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -144,6 +149,7 @@ curl -X POST https://partners.andmilo.com/api/v1/users \
 Pass `data` and `message` exactly as returned by step 1.
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -154,7 +160,12 @@ Pass `data` and `message` exactly as returned by step 1.
       "createdAt": "2025-01-01T00:00:00.000Z"
     },
     "wallets": [
-      { "id": "uuid", "address": "7HgJ...", "chain": "solana", "type": "signup" },
+      {
+        "id": "uuid",
+        "address": "7HgJ...",
+        "chain": "solana",
+        "type": "signup"
+      },
       { "id": "uuid", "address": "HCm9...", "chain": "solana", "type": "milo" }
     ],
     "apiKey": "mk_live_..."
@@ -163,6 +174,7 @@ Pass `data` and `message` exactly as returned by step 1.
 ```
 
 You get two wallets:
+
 - **signup** — Your external signing wallet
 - **milo** — Your trading wallet. Deposit SOL here.
 
@@ -206,30 +218,32 @@ curl -X PATCH https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-sett
   }'
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `isActive` | boolean | Enable/disable auto-trading |
-| `riskTolerance` | string | `conservative`, `balanced`, `degen` |
-| `strategy` | string | `VALUE INVESTOR`, `SWING TRADER`, `SCALPER`, `CUSTOM` |
-| `strategyId` | uuid \| null | Link a saved strategy |
-| `modelVersion` | string \| null | Preferred model for autotrade decisions |
-| `instructions` | string | Free-text trading instructions |
-| `customTickers` | string[] | Tokens to focus on |
-| `allocation` | object | Asset class percentages |
-| `dataSources` | object \| null | Global data-source toggles: `fundingRates`, `openInterest`, `liquidationData`, `macroData` |
-| `assetClassSettings` | object \| null | Per-asset-class configuration, including nested `dataSources` overrides |
+| Field                | Type           | Description                                                                                |
+| -------------------- | -------------- | ------------------------------------------------------------------------------------------ |
+| `isActive`           | boolean        | Enable/disable auto-trading                                                                |
+| `riskTolerance`      | string         | `conservative`, `balanced`, `degen`                                                        |
+| `strategy`           | string         | `VALUE INVESTOR`, `SWING TRADER`, `SCALPER`, `CUSTOM`                                      |
+| `strategyId`         | uuid \| null   | Link a saved strategy                                                                      |
+| `modelVersion`       | string \| null | Preferred model for autotrade decisions                                                    |
+| `instructions`       | string         | Free-text trading instructions                                                             |
+| `customTickers`      | string[]       | Tokens to focus on                                                                         |
+| `allocation`         | object         | Asset class percentages                                                                    |
+| `dataSources`        | object \| null | Global data-source toggles: `fundingRates`, `openInterest`, `liquidationData`, `macroData` |
+| `assetClassSettings` | object \| null | Per-asset-class configuration, including nested `dataSources` overrides                    |
 
 **Asset classes:** `trenches`, `memes`, `promising-memes`, `staking`, `native`, `majors`, `stables`, `xStocks`, `custom`
 
 `isActive` can only be set to `true` if the Milo wallet holds at least 1 SOL.
 
 Data-source resolution notes:
+
 - Asset-class `dataSources` overrides win over top-level `dataSources`.
 - If no override exists, the top-level value applies.
 - Missing keys are treated as disabled.
 - PATCH deep-merges `dataSources` both globally and inside `assetClassSettings`, so partial updates do not wipe sibling keys.
 
 Model entitlement notes:
+
 - Only canonical model ids are accepted on the partner surface.
 - Canonical OpenAI model ids are `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
 - Canonical Anthropic model ids are `claude-opus-4.5` and `claude-opus-4.6`.
@@ -238,6 +252,7 @@ Model entitlement notes:
 - If a model is unavailable for your account, the API returns `400 Bad Request` with `error.details.requiredPlan`, `error.details.upgradeUrl`, and an error message containing the same plan-specific Stripe link.
 
 Data-source entitlement notes:
+
 - Only `pro` and `max` users can create, update, apply, sync, or otherwise change `dataSources`.
 - Free users can still read saved `dataSources` in GET responses.
 - If an account downgrades, saved `dataSources` remain visible but are inactive in auto-trader chat, execution, and position review until the account is back on Pro or Max.
@@ -273,17 +288,17 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-setti
   }'
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | yes | Strategy name (1-200 chars) |
-| `strategy` | string | yes | `VALUE INVESTOR`, `SWING TRADER`, `SCALPER`, `CUSTOM` |
-| `description` | string | no | Description (max 2000 chars) |
-| `instructions` | string | no | Free-text instructions (max 4000 chars) |
-| `allocation` | object | no | Asset class percentages |
-| `customTickers` | string[] | no | Token tickers to focus on |
-| `dataSources` | object \| null | no | Global data-source toggles carried into the strategy snapshot |
-| `assetClassSettings` | object \| null | no | Per-asset-class configuration, including nested `dataSources` |
-| `isPublic` | boolean | no | Make publicly discoverable |
+| Field                | Type           | Required | Description                                                   |
+| -------------------- | -------------- | -------- | ------------------------------------------------------------- |
+| `name`               | string         | yes      | Strategy name (1-200 chars)                                   |
+| `strategy`           | string         | yes      | `VALUE INVESTOR`, `SWING TRADER`, `SCALPER`, `CUSTOM`         |
+| `description`        | string         | no       | Description (max 2000 chars)                                  |
+| `instructions`       | string         | no       | Free-text instructions (max 4000 chars)                       |
+| `allocation`         | object         | no       | Asset class percentages                                       |
+| `customTickers`      | string[]       | no       | Token tickers to focus on                                     |
+| `dataSources`        | object \| null | no       | Global data-source toggles carried into the strategy snapshot |
+| `assetClassSettings` | object \| null | no       | Per-asset-class configuration, including nested `dataSources` |
+| `isPublic`           | boolean        | no       | Make publicly discoverable                                    |
 
 The same Pro/Max restriction applies when creating or updating a strategy with `dataSources`, and when syncing a linked strategy that already contains them.
 
@@ -296,11 +311,11 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-settings/str
   -H "X-API-Key: $API_KEY"
 ```
 
-| Param | Type | Description |
-|-------|------|-------------|
-| `scope` | string | `all`, `owned`, `public` |
-| `q` | string | Search by name/description |
-| `page` | number | Page number (default: 1) |
+| Param      | Type   | Description                            |
+| ---------- | ------ | -------------------------------------- |
+| `scope`    | string | `all`, `owned`, `public`               |
+| `q`        | string | Search by name/description             |
+| `page`     | number | Page number (default: 1)               |
 | `pageSize` | number | Items per page (default: 25, max: 100) |
 
 #### Get Strategy
@@ -324,6 +339,7 @@ All fields from create are optional.
 Re-applies the latest strategy snapshot to your auto-trade settings. Use this when `strategySync.synced` is `false` in the GET settings response.
 
 **Strategy workflow:**
+
 1. Create a strategy
 2. Link it: `PATCH /auto-trade-settings` with `{ "strategyId": "..." }`
 3. Milo trades using the snapshot
@@ -347,11 +363,12 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/arena/deploy \
   -d '{ "strategyId": "<strategy-uuid>" }'
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `strategyId` | uuid | yes | ID of a public strategy owned by the user |
+| Field        | Type | Required | Description                               |
+| ------------ | ---- | -------- | ----------------------------------------- |
+| `strategyId` | uuid | yes      | ID of a public strategy owned by the user |
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -375,11 +392,12 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/arena/withdraw \
   -d '{ "strategyId": "<strategy-uuid>" }'
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `strategyId` | uuid | yes | ID of the deployed strategy to withdraw |
+| Field        | Type | Required | Description                             |
+| ------------ | ---- | -------- | --------------------------------------- |
+| `strategyId` | uuid | yes      | ID of the deployed strategy to withdraw |
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -388,7 +406,11 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/arena/withdraw \
     "custodyWalletAddress": "<solana-address>",
     "recipientWalletAddress": "<solana-address>",
     "transferTxs": [
-      { "tokenAddress": "<mint-address>", "amount": 1.5, "signature": "<tx-signature>" }
+      {
+        "tokenAddress": "<mint-address>",
+        "amount": 1.5,
+        "signature": "<tx-signature>"
+      }
     ]
   }
 }
@@ -403,17 +425,18 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/arena/leaderboard?timef
   -H "X-API-Key: $API_KEY"
 ```
 
-| Param | Type | Values | Default |
-|-------|------|--------|---------|
-| `timeframe` | string | `1d`, `30d`, `90d` | — |
-| `page` | number | Page number | 1 |
-| `pageSize` | number | Items per page (max: 100) | 25 |
-| `sortKey` | string | `pnl`, `winRate`, `returnPct`, `accountValue` | — |
-| `sortDirection` | string | `asc`, `desc` | — |
+| Param           | Type   | Values                                        | Default |
+| --------------- | ------ | --------------------------------------------- | ------- |
+| `timeframe`     | string | `1d`, `30d`, `90d`                            | —       |
+| `page`          | number | Page number                                   | 1       |
+| `pageSize`      | number | Items per page (max: 100)                     | 25      |
+| `sortKey`       | string | `pnl`, `winRate`, `returnPct`, `accountValue` | —       |
+| `sortDirection` | string | `asc`, `desc`                                 | —       |
 
 `winRate` is token-PnL based: `(number of tokens with positive token PnL / total tracked tokens) * 100`, excluding USDC.
 
 **Response:**
+
 ```json
 {
   "data": [
@@ -451,16 +474,17 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/quests" \
   -H "X-API-Key: $API_KEY"
 ```
 
-| Param | Type | Description | Default |
-|-------|------|-------------|---------|
-| `unlocked` | boolean | Filter for unlocked quests (available) | `true` |
-| `unclaimed` | boolean | Filter for completed but unclaimed quests | — |
-| `claimed` | boolean | Filter for claimed quests | — |
-| `mode` | string | `completed_last` | — |
-| `page` | number | Page number | 1 |
-| `pageSize` | number | Items per page (max: 100) | 25 |
+| Param       | Type    | Description                               | Default |
+| ----------- | ------- | ----------------------------------------- | ------- |
+| `unlocked`  | boolean | Filter for unlocked quests (available)    | `true`  |
+| `unclaimed` | boolean | Filter for completed but unclaimed quests | —       |
+| `claimed`   | boolean | Filter for claimed quests                 | —       |
+| `mode`      | string  | `completed_last`                          | —       |
+| `page`      | number  | Page number                               | 1       |
+| `pageSize`  | number  | Items per page (max: 100)                 | 25      |
 
 **Response:**
+
 ```json
 {
   "data": [
@@ -474,7 +498,13 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/quests" \
       "completed": true,
       "unlocked": true,
       "requirements": [
-        { "requirementId": "uuid", "aggregationKind": "count", "targetValue": 1, "currentValue": 1, "completed": true }
+        {
+          "requirementId": "uuid",
+          "aggregationKind": "count",
+          "targetValue": 1,
+          "currentValue": 1,
+          "completed": true
+        }
       ]
     }
   ],
@@ -503,6 +533,7 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/quests/bones" \
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -566,19 +597,23 @@ Market orders require `expiresAt`, and it must be within 120 minutes of the requ
 **Take-profit / Stop-loss (optional):**
 
 `takeProfits` array items:
+
 - `percentage` (1-100) — Percent of position to sell
 - `profitPercentage` (> 0) — Profit % to trigger
 
 `stopLosses` array items:
+
 - `percentage` (1-100) — Percent of position to sell
 - `lossPercentage` (1-100) — Loss % to trigger
 
 Dependant creation flow:
+
 - Main order is created first.
 - TP and SL dependants are created sequentially as draft sell children (`parentId` = main order ID).
 - Dependant failures are returned per dependant item while the main order still returns `201 Created`.
 
 Guardrails (always enforce mode):
+
 - `takeProfits.length <= 5`
 - `stopLosses.length <= 5`
 - `takeProfits.length + stopLosses.length <= 8`
@@ -586,6 +621,7 @@ Guardrails (always enforce mode):
 Guardrail violations return `400 bad_request` with a clear validation message.
 
 **Response:**
+
 ```json
 {
   "data": {
@@ -594,8 +630,14 @@ Guardrail violations return `400 bad_request` with a clear validation message.
       "type": "buy",
       "status": "active",
       "dependants": [
-        { "type": "take_profit", "order": { "id": "...", "subType": "take_profit", "status": "draft" } },
-        { "type": "stop_loss", "order": { "id": "...", "subType": "stop_loss", "status": "draft" } }
+        {
+          "type": "take_profit",
+          "order": { "id": "...", "subType": "take_profit", "status": "draft" }
+        },
+        {
+          "type": "stop_loss",
+          "order": { "id": "...", "subType": "stop_loss", "status": "draft" }
+        }
       ]
     }
   }
@@ -611,13 +653,13 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/orders?status=active&ty
   -H "X-API-Key: $API_KEY"
 ```
 
-| Param | Type | Values |
-|-------|------|--------|
-| `status` | string | `active`, `paused`, `error`, `fulfilled`, `archived`, `draft` |
-| `type` | string | `buy`, `sell` |
-| `tokenAddress` | string | Filter by token |
-| `page` | number | Page number (default: 1, max: 100) |
-| `pageSize` | number | Items per page (default: 25, max: 100) |
+| Param          | Type   | Values                                                        |
+| -------------- | ------ | ------------------------------------------------------------- |
+| `status`       | string | `active`, `paused`, `error`, `fulfilled`, `archived`, `draft` |
+| `type`         | string | `buy`, `sell`                                                 |
+| `tokenAddress` | string | Filter by token                                               |
+| `page`         | number | Page number (default: 1, max: 100)                            |
+| `pageSize`     | number | Items per page (default: 25, max: 100)                        |
 
 #### Get Order
 
@@ -654,16 +696,17 @@ curl -X POST https://partners.andmilo.com/api/v1/wallets/{walletId}/actions/send
   }'
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `recipient` | string | Destination Solana address |
-| `token` | string | Token mint address |
-| `amount` | number | Amount in human-readable units (e.g. 1.5 SOL) |
+| Field       | Type   | Description                                   |
+| ----------- | ------ | --------------------------------------------- |
+| `recipient` | string | Destination Solana address                    |
+| `token`     | string | Token mint address                            |
+| `amount`    | number | Amount in human-readable units (e.g. 1.5 SOL) |
 
 For native SOL use mint: `So11111111111111111111111111111111111111112`
 If a JSON body includes `walletId`, it must match the `{walletId}` path parameter.
 
 **Response (202):**
+
 ```json
 { "data": { "data": "5t7...transaction-signature" } }
 ```
@@ -688,19 +731,20 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/conversations \
   }'
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `message` | string | yes | Initial message (1-4000 chars) |
-| `agentType` | string | no | Agent type (default: `market-analyst`) |
+| Field       | Type   | Required | Description                            |
+| ----------- | ------ | -------- | -------------------------------------- |
+| `message`   | string | yes      | Initial message (1-4000 chars)         |
+| `agentType` | string | no       | Agent type (default: `market-analyst`) |
 
 **Agent types:**
 
-| Agent | Value | Purpose |
-|-------|-------|---------|
-| Market Analyst | `market-analyst` | Token research, technicals, sentiment |
-| Auto Trader | `auto-trader` | Strategy discussion, can update settings |
+| Agent          | Value            | Purpose                                  |
+| -------------- | ---------------- | ---------------------------------------- |
+| Market Analyst | `market-analyst` | Token research, technicals, sentiment    |
+| Auto Trader    | `auto-trader`    | Strategy discussion, can update settings |
 
 **Response (201):**
+
 ```json
 {
   "data": {
@@ -744,12 +788,23 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/conversations/{conversa
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
     "messages": [
-      { "messageId": "...", "role": "user", "content": "...", "createdAt": "..." },
-      { "messageId": "...", "role": "assistant", "content": "...", "createdAt": "..." }
+      {
+        "messageId": "...",
+        "role": "user",
+        "content": "...",
+        "createdAt": "..."
+      },
+      {
+        "messageId": "...",
+        "role": "assistant",
+        "content": "...",
+        "createdAt": "..."
+      }
     ],
     "processing": false
   },
@@ -758,6 +813,7 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/conversations/{conversa
 ```
 
 **Polling pattern:**
+
 1. Send a message (POST)
 2. Poll GET messages every 2-3 seconds
 3. When `processing` is `false`, the agent has finished
@@ -775,10 +831,10 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/positions?status=active
   -H "X-API-Key: $API_KEY"
 ```
 
-| Param | Values |
-|-------|--------|
-| `status` | `active`, `pending`, `not_active` |
-| `page` | Page number (default: 1, max: 100) |
+| Param      | Values                                 |
+| ---------- | -------------------------------------- |
+| `status`   | `active`, `pending`, `not_active`      |
+| `page`     | Page number (default: 1, max: 100)     |
 | `pageSize` | Items per page (default: 25, max: 100) |
 
 Each position includes entry/exit orders, TP/SL orders, invested amount, realized/unrealized PnL, and current value.
@@ -796,15 +852,14 @@ Cancels pending orders and creates a sell order for remaining holdings.
 Closes all active and pending positions. Partial failures don't block other positions.
 
 **Response:**
+
 ```json
 {
   "data": {
     "successes": [
       { "thesisId": "...", "cancelled": 2, "sellOrderCreated": true }
     ],
-    "failures": [
-      { "thesisId": "...", "error": "No wallet found" }
-    ]
+    "failures": [{ "thesisId": "...", "error": "No wallet found" }]
   }
 }
 ```
@@ -823,6 +878,7 @@ curl https://partners.andmilo.com/api/v1/wallets/{walletId}/holdings \
 ```
 
 **Response:**
+
 ```json
 {
   "data": [
@@ -858,12 +914,13 @@ curl "https://partners.andmilo.com/api/v1/wallets/{walletId}/transactions?limit=
   -H "X-API-Key: $API_KEY"
 ```
 
-| Param | Type | Description |
-|-------|------|-------------|
-| `limit` | number | Items per page (default: 25, max: 200) |
-| `cursor` | string | Cursor from previous response |
+| Param    | Type   | Description                            |
+| -------- | ------ | -------------------------------------- |
+| `limit`  | number | Items per page (default: 25, max: 200) |
+| `cursor` | string | Cursor from previous response          |
 
 **Response:**
+
 ```json
 {
   "data": [ ... ],
@@ -882,12 +939,12 @@ curl "https://partners.andmilo.com/api/v1/wallets/{walletId}/executed-transactio
   -H "X-API-Key: $API_KEY"
 ```
 
-| Param | Type | Description |
-|-------|------|-------------|
-| `limit` | number | Items per page (default: 25, max: 200) |
-| `cursor` | string | Cursor from previous response |
-| `txType` | string | Filter: `buy` or `sell` |
-| `token` | string | Filter by token address |
+| Param    | Type   | Description                            |
+| -------- | ------ | -------------------------------------- |
+| `limit`  | number | Items per page (default: 25, max: 200) |
+| `cursor` | string | Cursor from previous response          |
+| `txType` | string | Filter: `buy` or `sell`                |
+| `token`  | string | Filter by token address                |
 
 ---
 
@@ -903,6 +960,7 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/diary-logs?page=1&pageS
 ```
 
 **Response:**
+
 ```json
 {
   "data": [
@@ -925,12 +983,13 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/diary-logs?page=1&pageS
 
 Most list endpoints use page-based pagination:
 
-| Param | Default | Max |
-|-------|---------|-----|
-| `page` | 1 | 100 |
-| `pageSize` | 25 | 100 |
+| Param      | Default | Max |
+| ---------- | ------- | --- |
+| `page`     | 1       | 100 |
+| `pageSize` | 25      | 100 |
 
 Response includes:
+
 ```json
 { "meta": { "page": 1, "pageSize": 25, "total": 100, "pages": 4 } }
 ```
@@ -942,6 +1001,7 @@ Transactions and executed transactions use **cursor-based** pagination with `lim
 Rate limits are enforced across endpoints. Limits vary by endpoint and request context.
 
 Rate limit rejections return `429 Too Many Requests` with:
+
 - `error.code = "rate_limit_exceeded"`
 - `Retry-After` header (seconds)
 - `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers
@@ -987,11 +1047,11 @@ Schema validation failures also return `400 bad_request`, with `error.details.va
 }
 ```
 
-| Status | Code | Description |
-|--------|------|-------------|
-| 400 | `bad_request` | Invalid input or validation error |
-| 401 | `unauthorized` | Missing or invalid API key |
-| 404 | `not_found` | Resource not found |
-| 409 | `error` | Conflict (e.g. wallet already registered) |
-| 429 | `rate_limit_exceeded` | Rate limit exceeded |
-| 500 | `internal_error` | Server error |
+| Status | Code                  | Description                               |
+| ------ | --------------------- | ----------------------------------------- |
+| 400    | `bad_request`         | Invalid input or validation error         |
+| 401    | `unauthorized`        | Missing or invalid API key                |
+| 404    | `not_found`           | Resource not found                        |
+| 409    | `error`               | Conflict (e.g. wallet already registered) |
+| 429    | `rate_limit_exceeded` | Rate limit exceeded                       |
+| 500    | `internal_error`      | Server error                              |

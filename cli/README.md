@@ -2,6 +2,8 @@
 
 TypeScript CLI for the Milo Partner API. Zero runtime dependencies, single-file bundle via tsup.
 
+Trading execution note: the CLI payloads and response shapes stay the same while the backend now sources swap quotes from DFlow and submits signed swap transactions through Helius Sender.
+
 ## Prerequisites
 
 - Node.js 22+
@@ -53,44 +55,44 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `signup` | Register via SIWX wallet verification (auto-signs with `--secret-key`) |
-| `me` | Get current user profile and wallets for the authenticated API key |
-| `get-holdings` | Get token holdings for a wallet |
-| `transactions` | List wallet transactions |
-| `executed-transactions` | Get executed (order-linked) transactions |
-| `list-positions` | List investment positions with PnL |
-| `close-position` | Close a position |
-| `close-all-positions` | Close all positions |
-| `create-order` | Create a buy/sell order with optional TP/SL |
-| `list-orders` | List orders with filters |
-| `get-order` | Get order details |
-| `pause-order` | Pause an active order |
-| `activate-order` | Activate a draft/paused order |
-| `delete-order` | Archive an order |
-| `send-tokens` | Send tokens from your Milo wallet |
-| `get-settings` | Get auto-trade configuration |
-| `update-settings` | Update auto-trade configuration |
-| `list-strategies` | List autotrade strategies |
-| `get-strategy` | Get strategy details |
-| `create-strategy` | Create a strategy |
-| `update-strategy` | Update a strategy |
-| `delete-strategy` | Delete a strategy |
-| `sync-strategy` | Re-sync settings with a linked strategy |
-| `deploy-arena` | Deploy a public strategy to the arena |
-| `withdraw-arena` | Withdraw from the arena (transfers holdings back) |
-| `arena-leaderboard` | Get the arena leaderboard |
-| `list-quests` | List quests with progress and bones rewards (defaults to unlocked) |
-| `claim-quest` | Claim bones (reward points) for a completed quest |
-| `bones-balance` | Get your bones (reward points) balance |
-| `create-conversation` | Start a conversation with Milo AI |
-| `list-conversations` | List conversations |
-| `get-conversation` | Get conversation details |
-| `send-message` | Send a message to a conversation |
-| `get-messages` | Get messages (poll `processing` flag) |
-| `diary-logs` | Get auto-trade diary logs |
-| `config` | Show or update `~/.milo/config.json` |
+| Command                 | Description                                                            |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `signup`                | Register via SIWX wallet verification (auto-signs with `--secret-key`) |
+| `me`                    | Get current user profile and wallets for the authenticated API key     |
+| `get-holdings`          | Get token holdings for a wallet                                        |
+| `transactions`          | List wallet transactions                                               |
+| `executed-transactions` | Get executed (order-linked) transactions                               |
+| `list-positions`        | List investment positions with PnL                                     |
+| `close-position`        | Close a position                                                       |
+| `close-all-positions`   | Close all positions                                                    |
+| `create-order`          | Create a buy/sell order with optional TP/SL                            |
+| `list-orders`           | List orders with filters                                               |
+| `get-order`             | Get order details                                                      |
+| `pause-order`           | Pause an active order                                                  |
+| `activate-order`        | Activate a draft/paused order                                          |
+| `delete-order`          | Archive an order                                                       |
+| `send-tokens`           | Send tokens from your Milo wallet                                      |
+| `get-settings`          | Get auto-trade configuration                                           |
+| `update-settings`       | Update auto-trade configuration                                        |
+| `list-strategies`       | List autotrade strategies                                              |
+| `get-strategy`          | Get strategy details                                                   |
+| `create-strategy`       | Create a strategy                                                      |
+| `update-strategy`       | Update a strategy                                                      |
+| `delete-strategy`       | Delete a strategy                                                      |
+| `sync-strategy`         | Re-sync settings with a linked strategy                                |
+| `deploy-arena`          | Deploy a public strategy to the arena                                  |
+| `withdraw-arena`        | Withdraw from the arena (transfers holdings back)                      |
+| `arena-leaderboard`     | Get the arena leaderboard                                              |
+| `list-quests`           | List quests with progress and bones rewards (defaults to unlocked)     |
+| `claim-quest`           | Claim bones (reward points) for a completed quest                      |
+| `bones-balance`         | Get your bones (reward points) balance                                 |
+| `create-conversation`   | Start a conversation with Milo AI                                      |
+| `list-conversations`    | List conversations                                                     |
+| `get-conversation`      | Get conversation details                                               |
+| `send-message`          | Send a message to a conversation                                       |
+| `get-messages`          | Get messages (poll `processing` flag)                                  |
+| `diary-logs`            | Get auto-trade diary logs                                              |
+| `config`                | Show or update `~/.milo/config.json`                                   |
 
 ## Guardrails and Throttling
 

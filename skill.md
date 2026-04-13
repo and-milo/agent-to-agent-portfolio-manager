@@ -8,6 +8,8 @@ description: Autonomous Solana portfolio management. Non-custodial wallets, auto
 
 Milo is an autonomous Solana portfolio manager. Through this API you can register users, create non-custodial wallets, send tokens, place buy/sell orders, manage positions, configure auto-trading strategies, and converse with Milo's AI agents.
 
+Trading execution note: partner-facing swap and order payloads stay the same, but Milo now sources swap quotes from DFlow and submits signed swap transactions through Helius Sender.
+
 ## Getting Started — First-Time Onboarding
 
 Follow these 4 steps to go from zero to a fully active Milo account.
@@ -96,22 +98,23 @@ That's it — Milo is now managing your portfolio. Read on for the full feature 
 
 > **Note:** You do NOT need to read this entire document. Use the guide below to jump to the relevant section for your task.
 
-| If you need to... | Read section |
-|---|---|
-| **Look up your user ID and wallet IDs** | "Me" (under Complete API Reference) |
-| **Register a new user / get an API key** | "First Boot Protocol" and "Signup" (under Complete API Reference) |
-| **Activate or configure auto-trading** | "Recipe 2: Activate the auto-trader" and "Auto-Trade Settings" (under Complete API Reference) |
-| **Create, link, or manage strategies** | "Strategies" (under Complete API Reference) |
-| **Deploy and manage arena strategies** | "Arena" (under Complete API Reference) |
-| **View quests and claim bones** | "Quests & Bones" (under Complete API Reference) |
-| **Place, list, or manage orders** | "Orders" (under Complete API Reference) |
-| **Send tokens to another wallet** | "Wallet Actions" (under Complete API Reference) |
-| **Check positions, holdings, or PnL** | "Recipe 4: Fetch your positions" and "Portfolio" (under Complete API Reference) |
-| **Chat with Milo's AI agents** | "Recipe 3: Talk with Milo" / "Recipe 6: Ask about a token" and "Conversations" (under Complete API Reference) |
-| **Understand the full onboarding flow** | "Quick Start" and "First Boot Protocol" |
-| **Set up a recurring portfolio check-in** | "Heartbeat Protocol" |
+| If you need to...                         | Read section                                                                                                  |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Look up your user ID and wallet IDs**   | "Me" (under Complete API Reference)                                                                           |
+| **Register a new user / get an API key**  | "First Boot Protocol" and "Signup" (under Complete API Reference)                                             |
+| **Activate or configure auto-trading**    | "Recipe 2: Activate the auto-trader" and "Auto-Trade Settings" (under Complete API Reference)                 |
+| **Create, link, or manage strategies**    | "Strategies" (under Complete API Reference)                                                                   |
+| **Deploy and manage arena strategies**    | "Arena" (under Complete API Reference)                                                                        |
+| **View quests and claim bones**           | "Quests & Bones" (under Complete API Reference)                                                               |
+| **Place, list, or manage orders**         | "Orders" (under Complete API Reference)                                                                       |
+| **Send tokens to another wallet**         | "Wallet Actions" (under Complete API Reference)                                                               |
+| **Check positions, holdings, or PnL**     | "Recipe 4: Fetch your positions" and "Portfolio" (under Complete API Reference)                               |
+| **Chat with Milo's AI agents**            | "Recipe 3: Talk with Milo" / "Recipe 6: Ask about a token" and "Conversations" (under Complete API Reference) |
+| **Understand the full onboarding flow**   | "Quick Start" and "First Boot Protocol"                                                                       |
+| **Set up a recurring portfolio check-in** | "Heartbeat Protocol"                                                                                          |
 
 **Capabilities:**
+
 - **Non-custodial Solana wallet** — Each user gets a Milo wallet (created via Turnkey). The user's signing key owns the wallet; Milo receives delegated permission to execute trades.
 - **Auto-trading** — Configure risk tolerance, strategy, and asset allocation. Milo's auto-trader agent monitors markets and executes trades autonomously.
 - **Orders** — Create limit, market, stop-loss, and take-profit orders on any Solana token.
@@ -150,14 +153,17 @@ After signup, persist credentials locally so they survive across sessions:
 > **Warning:** In ephemeral environments (containers, serverless), this file may not persist. Use environment variables or a secrets manager instead.
 
 All authenticated requests require the header:
+
 ```
 X-API-Key: <api_key>
 ```
+
 (NOT `Authorization: Bearer` — the API uses the `X-API-Key` header.)
 
 ## MCP Access
 
 The partner API server exposes MCP on the same host at `/mcp` using Streamable HTTP:
+
 - `POST /mcp` for initialize and JSON-RPC requests
 - `GET /mcp` for SSE stream
 - `DELETE /mcp` for session termination
@@ -171,10 +177,12 @@ For sessioned requests after initialize, send `Mcp-Session-Id`.
 Milo creates a **non-custodial** Solana wallet for each user via Turnkey. The wallet-creating account is the owner; Milo receives delegated permission for trading.
 
 On signup you receive two wallets:
+
 - `type: "signup"` - Your external signing wallet (used for SIWX verification).
 - `type: "milo"` - Your Milo trading wallet. **Deposit SOL here** for trading.
 
 To check your wallet balance, use the holdings endpoint:
+
 ```bash
 curl {{BASE_URL}}/api/v1/wallets/{walletId}/holdings \
   -H "X-API-Key: $API_KEY"
@@ -426,6 +434,7 @@ Run the [heartbeat protocol]({{BASE_URL}}/heartbeat.md) every 4+ hours to keep t
 ### Authentication
 
 All endpoints (except signup) require:
+
 ```
 X-API-Key: <api_key>
 ```
@@ -433,6 +442,7 @@ X-API-Key: <api_key>
 ### Me
 
 #### GET /api/v1/me
+
 Get the current user profile and wallets for the authenticated API key. Use this to discover your `userId` and `walletId` values.
 
 ```bash
@@ -441,6 +451,7 @@ curl {{BASE_URL}}/api/v1/me \
 ```
 
 **Response (200):**
+
 ```json
 {
   "user": {
@@ -450,7 +461,12 @@ curl {{BASE_URL}}/api/v1/me \
     "createdAt": "2025-01-01T00:00:00.000Z"
   },
   "wallets": [
-    { "id": "uuid", "address": "<address>", "chain": "solana", "type": "signup" },
+    {
+      "id": "uuid",
+      "address": "<address>",
+      "chain": "solana",
+      "type": "signup"
+    },
     { "id": "uuid", "address": "<address>", "chain": "solana", "type": "milo" }
   ]
 }
@@ -463,6 +479,7 @@ curl {{BASE_URL}}/api/v1/me \
 Signup is a two-step process: first request a SIWX message from the server, then sign it and submit the proof.
 
 #### POST /api/v1/users/siwx/message
+
 Generate a SIWX message for the wallet to sign. This is step 1 of signup.
 
 ```bash
@@ -482,6 +499,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/siwx/message \
 | `inviteCode` | string | no | Optional invite code |
 
 **Response (200):**
+
 ```json
 {
   "data": {
@@ -504,6 +522,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/siwx/message \
 Sign the `message` string (UTF-8 encoded bytes) with the wallet's ed25519 private key. Base58-encode the signature. Then proceed to step 2.
 
 #### POST /api/v1/users
+
 Create a new user via SIWX wallet verification. This is step 2 of signup.
 
 ```bash
@@ -522,13 +541,29 @@ curl -X POST {{BASE_URL}}/api/v1/users \
 **Important:** Pass the `data` and `message` fields exactly as returned by `POST /api/v1/users/siwx/message`. Do not construct them manually.
 
 **Response (200):**
+
 ```json
 {
   "data": {
-    "user": { "id": "uuid", "signupWalletId": "uuid", "provider": "siwx", "createdAt": "..." },
+    "user": {
+      "id": "uuid",
+      "signupWalletId": "uuid",
+      "provider": "siwx",
+      "createdAt": "..."
+    },
     "wallets": [
-      { "id": "uuid", "address": "<address>", "chain": "solana", "type": "signup" },
-      { "id": "uuid", "address": "<address>", "chain": "solana", "type": "milo" }
+      {
+        "id": "uuid",
+        "address": "<address>",
+        "chain": "solana",
+        "type": "signup"
+      },
+      {
+        "id": "uuid",
+        "address": "<address>",
+        "chain": "solana",
+        "type": "milo"
+      }
     ],
     "apiKey": "mk_live_..."
   }
@@ -540,6 +575,7 @@ curl -X POST {{BASE_URL}}/api/v1/users \
 ### Auto-Trade Settings
 
 #### GET /api/v1/users/{userId}/auto-trade-settings
+
 Get current auto-trade configuration.
 
 ```bash
@@ -548,6 +584,7 @@ curl {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings \
 ```
 
 #### PATCH /api/v1/users/{userId}/auto-trade-settings
+
 Update auto-trade configuration.
 
 ```bash
@@ -585,12 +622,14 @@ curl -X PATCH {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings \
 **Asset classes for allocation:** `trenches`, `memes`, `promising-memes`, `staking`, `native`, `majors`, `stables`, `xStocks`, `custom`
 
 Data-source resolution notes:
+
 - Asset-class `dataSources` overrides win over top-level `dataSources`.
 - If no override exists, the top-level value applies.
 - Missing keys are treated as disabled.
 - PATCH deep-merges `dataSources` both globally and inside `assetClassSettings`, so partial updates do not wipe sibling keys.
 
 Model entitlement notes:
+
 - Only canonical model ids are accepted on the partner surface.
 - Canonical OpenAI model ids are `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
 - Canonical Anthropic model ids are `claude-opus-4.5` and `claude-opus-4.6`.
@@ -599,6 +638,7 @@ Model entitlement notes:
 - If a model is unavailable for your account, the API returns `400 Bad Request` with `error.details.requiredPlan`, `error.details.upgradeUrl`, and an error message containing the same plan-specific Stripe link.
 
 Data-source entitlement notes:
+
 - Only `pro` and `max` users can create, update, apply, sync, or otherwise change `dataSources`.
 - Free users can still read saved `dataSources` in GET responses.
 - If an account downgrades, saved `dataSources` remain visible but are inactive in auto-trader chat, execution, and position review until the account is back on Pro or Max.
@@ -611,6 +651,7 @@ Data-source entitlement notes:
 Strategies are reusable autotrade configurations that live under auto-trade settings. Create a strategy, link it to your settings, and sync when the strategy evolves.
 
 **Workflow:**
+
 1. **Create** a strategy with allocation, instructions, and trading approach.
 2. **Link** it via `PATCH /auto-trade-settings` with `{ "strategyId": "<uuid>" }`. This takes a **snapshot** of the strategy into your settings.
 3. **Use** — Milo auto-trades according to the snapshot.
@@ -618,6 +659,7 @@ Strategies are reusable autotrade configurations that live under auto-trade sett
 5. **Sync** — call `POST .../strategies/{strategyId}/sync` to re-apply the latest version.
 
 #### POST /api/v1/users/{userId}/auto-trade-settings/strategies
+
 Create a new strategy.
 
 ```bash
@@ -641,6 +683,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies \
 ```
 
 **Response (201):**
+
 ```json
 {
   "data": {
@@ -669,6 +712,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies \
 The same Pro/Max restriction applies when creating or updating a strategy with `dataSources`, and when syncing a linked strategy that already contains them.
 
 #### GET /api/v1/users/{userId}/auto-trade-settings/strategies
+
 List strategies with filters.
 
 ```bash
@@ -685,6 +729,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies?scope=ow
 | `pageSize` | number | Items per page (default: 25, max: 100) |
 
 #### GET /api/v1/users/{userId}/auto-trade-settings/strategies/{strategyId}
+
 Get strategy details.
 
 ```bash
@@ -693,6 +738,7 @@ curl {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies/{strategy
 ```
 
 #### PATCH /api/v1/users/{userId}/auto-trade-settings/strategies/{strategyId}
+
 Update a strategy. All fields are optional.
 
 ```bash
@@ -706,6 +752,7 @@ curl -X PATCH {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies/
 ```
 
 #### DELETE /api/v1/users/{userId}/auto-trade-settings/strategies/{strategyId}
+
 Delete a strategy.
 
 ```bash
@@ -714,6 +761,7 @@ curl -X DELETE {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies
 ```
 
 #### POST /api/v1/users/{userId}/auto-trade-settings/strategies/{strategyId}/sync
+
 Re-sync auto-trade settings with the linked strategy. Takes a fresh snapshot of the strategy's current allocation, instructions, and configuration.
 
 ```bash
@@ -724,6 +772,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies/{
 **Strategy sync workflow:**
 
 1. Link a strategy to your settings:
+
 ```bash
 curl -X PATCH {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings \
   -H "X-API-Key: $API_KEY" \
@@ -732,6 +781,7 @@ curl -X PATCH {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings \
 ```
 
 2. Check sync status (included in GET settings response):
+
 ```json
 {
   "strategyId": "uuid",
@@ -745,6 +795,7 @@ curl -X PATCH {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings \
 ```
 
 3. When `synced` is `false`, re-sync:
+
 ```bash
 curl -X POST {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies/{strategyId}/sync \
   -H "X-API-Key: $API_KEY"
@@ -757,6 +808,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies/{
 Deploy a public strategy to the arena leaderboard. Milo creates a custody wallet, funds it, and trades autonomously using the strategy. The strategy must be public and owned by the user. Deployment requires at least 1 SOL balance (0.01 SOL in dev). Withdrawing transfers all holdings back to the user's Milo wallet.
 
 #### POST /api/v1/users/{userId}/arena/deploy
+
 Deploy a strategy to the arena.
 
 ```bash
@@ -772,6 +824,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/arena/deploy \
 | `strategyId` | uuid | yes | ID of a public strategy owned by the user |
 
 **Response (200):**
+
 ```json
 {
   "data": {
@@ -785,6 +838,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/arena/deploy \
 ```
 
 #### POST /api/v1/users/{userId}/arena/withdraw
+
 Withdraw from the arena. Transfers all holdings from the custody wallet back to the user's Milo wallet.
 
 ```bash
@@ -800,6 +854,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/arena/withdraw \
 | `strategyId` | uuid | yes | ID of the deployed strategy to withdraw |
 
 **Response (200):**
+
 ```json
 {
   "data": {
@@ -808,13 +863,18 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/arena/withdraw \
     "custodyWalletAddress": "<solana-address>",
     "recipientWalletAddress": "<solana-address>",
     "transferTxs": [
-      { "tokenAddress": "<mint-address>", "amount": 1.5, "signature": "<tx-signature>" }
+      {
+        "tokenAddress": "<mint-address>",
+        "amount": 1.5,
+        "signature": "<tx-signature>"
+      }
     ]
   }
 }
 ```
 
 #### GET /api/v1/users/{userId}/arena/leaderboard
+
 Get the arena leaderboard.
 
 ```bash
@@ -834,6 +894,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/arena/leaderboard?timeframe=30d&page=1&
 `winRate` is token-PnL based: `(number of tokens with positive token PnL / total tracked tokens) * 100`, excluding USDC.
 
 **Response (200):**
+
 ```json
 {
   "data": [
@@ -861,6 +922,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/arena/leaderboard?timeframe=30d&page=1&
 Quests are event-driven tasks (trades, signups, etc.) that reward bones (points) upon completion. Each quest has requirements (count, sum, or streak-based) and awards bones when all requirements are met. **Check quests regularly** — call `list_quests` to see open quests, and with `unclaimed=true` to discover completed quests, then `claim_quest` to collect the bones.
 
 #### GET /api/v1/users/{userId}/quests
+
 List quests with progress and requirements. By default returns only unlocked (available) quests.
 
 ```bash
@@ -879,6 +941,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/quests?page=1&pageSize=25" \
 | `pageSize` | number | Items per page (max: 100) | 25 |
 
 **Response (200):**
+
 ```json
 {
   "data": [
@@ -909,6 +972,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/quests?page=1&pageSize=25" \
 ```
 
 #### POST /api/v1/users/{userId}/quests/{questId}/claim
+
 Claim bones for a completed quest.
 
 ```bash
@@ -917,6 +981,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/quests/{questId}/claim \
 ```
 
 **Response (200):**
+
 ```json
 { "data": null }
 ```
@@ -924,6 +989,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/quests/{questId}/claim \
 Returns 404 if the quest is not found or already claimed.
 
 #### GET /api/v1/users/{userId}/quests/bones
+
 Get the user's bones balance.
 
 ```bash
@@ -932,6 +998,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/quests/bones" \
 ```
 
 **Response (200):**
+
 ```json
 {
   "data": {
@@ -951,6 +1018,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/quests/bones" \
 ### Wallet Actions
 
 #### POST /api/v1/wallets/{walletId}/actions/send
+
 Send tokens from your Milo wallet to a recipient address.
 
 ```bash
@@ -965,6 +1033,7 @@ curl -X POST {{BASE_URL}}/api/v1/wallets/{walletId}/actions/send \
 ```
 
 **Response (202):**
+
 ```json
 { "data": "<transaction-signature>" }
 ```
@@ -977,6 +1046,7 @@ curl -X POST {{BASE_URL}}/api/v1/wallets/{walletId}/actions/send \
 ### Orders
 
 #### POST /api/v1/wallets/{walletId}/orders
+
 Create a new order, optionally with take-profit and stop-loss dependants.
 
 ```bash
@@ -1005,6 +1075,7 @@ curl -X POST {{BASE_URL}}/api/v1/wallets/{walletId}/orders \
 ```
 
 **Response** includes the main order plus a `dependants` array:
+
 ```json
 {
   "data": {
@@ -1012,9 +1083,33 @@ curl -X POST {{BASE_URL}}/api/v1/wallets/{walletId}/orders \
     "type": "buy",
     "status": "active",
     "dependants": [
-      { "type": "take_profit", "order": { "id": "...", "parentId": "...", "subType": "take_profit", "status": "draft" } },
-      { "type": "take_profit", "order": { "id": "...", "parentId": "...", "subType": "take_profit", "status": "draft" } },
-      { "type": "stop_loss",   "order": { "id": "...", "parentId": "...", "subType": "stop_loss",   "status": "draft" } }
+      {
+        "type": "take_profit",
+        "order": {
+          "id": "...",
+          "parentId": "...",
+          "subType": "take_profit",
+          "status": "draft"
+        }
+      },
+      {
+        "type": "take_profit",
+        "order": {
+          "id": "...",
+          "parentId": "...",
+          "subType": "take_profit",
+          "status": "draft"
+        }
+      },
+      {
+        "type": "stop_loss",
+        "order": {
+          "id": "...",
+          "parentId": "...",
+          "subType": "stop_loss",
+          "status": "draft"
+        }
+      }
     ]
   }
 }
@@ -1023,19 +1118,23 @@ curl -X POST {{BASE_URL}}/api/v1/wallets/{walletId}/orders \
 **Take-profit / Stop-loss ladder (optional):**
 
 `takeProfits` array — each item:
+
 - `percentage` (1–100) — percent of position to sell
 - `profitPercentage` (> 0) — profit percent to trigger the TP
 
 `stopLosses` array — each item:
+
 - `percentage` (1–100) — percent of position to sell
 - `lossPercentage` (1–100) — loss percent to trigger the SL
 
 Dependant creation flow (enforced):
+
 - Main order is created first.
 - TP and SL dependants are created sequentially as draft sell children (`parentId` = main order ID).
 - Dependant failures are captured per dependant entry while the main order still returns `201`.
 
 Guardrails (always enforce mode):
+
 - `takeProfits.length <= 5`
 - `stopLosses.length <= 5`
 - `takeProfits.length + stopLosses.length <= 8`
@@ -1045,13 +1144,16 @@ Violations return `400 bad_request` with a clear validation message. Dependants 
 **Order payload structure:**
 
 Buy order amounts:
+
 - `{ "type": "absolute", "amount": 1000000 }` - Raw token amount
 - `{ "type": "absolute_usd", "amount": 50 }` - USD equivalent
 
 Sell order amounts (additional option):
+
 - `{ "type": "relative", "percentage": 50 }` - Percentage of position
 
 Trigger types:
+
 - Market order: `{ "type": "absolute", "trigger": "price", "operator": "gte", "value": 0 }`
 - Limit buy: `{ "type": "absolute", "trigger": "price", "operator": "lte", "value": 150.00 }`
 - Stop loss: `{ "type": "relative", "trigger": "price", "operator": "drop", "value": 10 }` (10% drop)
@@ -1060,6 +1162,7 @@ Trigger types:
 Market orders require `expiresAt`, and it must be within 120 minutes of the request time.
 
 Execution options (all optional):
+
 - `slippagePercentage` - Max slippage (0-100)
 - `priorityFee` - Priority fee in SOL lamports
 - `platformFeeBps` - Platform fee override in basis points
@@ -1067,6 +1170,7 @@ Execution options (all optional):
 **Linking to a thesis:** Pass `positionThesisId` (UUID) in the body to attach the order (and its TP/SL dependants) to a position thesis.
 
 #### GET /api/v1/users/{userId}/orders
+
 List orders with filters.
 
 ```bash
@@ -1084,6 +1188,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/orders?status=active&type=buy&page=1&pa
 | `pageSize` | number | Items per page (default: 25, max: 100) |
 
 #### GET /api/v1/users/{userId}/orders/{orderId}
+
 Get order details.
 
 ```bash
@@ -1092,6 +1197,7 @@ curl {{BASE_URL}}/api/v1/users/{userId}/orders/{orderId} \
 ```
 
 #### POST /api/v1/users/{userId}/orders/{orderId}/pause
+
 Pause an active order.
 
 ```bash
@@ -1100,6 +1206,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/orders/{orderId}/pause \
 ```
 
 #### POST /api/v1/users/{userId}/orders/{orderId}/activate
+
 Activate a draft or paused order.
 
 ```bash
@@ -1108,6 +1215,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/orders/{orderId}/activate \
 ```
 
 #### DELETE /api/v1/users/{userId}/orders/{orderId}
+
 Archive (delete) an order.
 
 ```bash
@@ -1122,6 +1230,7 @@ curl -X DELETE {{BASE_URL}}/api/v1/users/{userId}/orders/{orderId} \
 Milo uses an async conversation model. You send a message and the agent processes it in the background. Poll the messages endpoint for the response using the `processing` flag.
 
 #### POST /api/v1/users/{userId}/conversations
+
 Create a new conversation and send the first message.
 
 ```bash
@@ -1142,6 +1251,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/conversations \
 | Game Agent | `milo-game-agent` | Gamified trading experience |
 
 **Response (201):**
+
 ```json
 {
   "data": {
@@ -1155,6 +1265,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/conversations \
 ```
 
 #### GET /api/v1/users/{userId}/conversations
+
 List conversations.
 
 ```bash
@@ -1163,6 +1274,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/conversations?page=1&pageSize=25" \
 ```
 
 #### GET /api/v1/users/{userId}/conversations/{conversationId}
+
 Get conversation details.
 
 ```bash
@@ -1171,6 +1283,7 @@ curl {{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId} \
 ```
 
 #### POST /api/v1/users/{userId}/conversations/{conversationId}/messages
+
 Send a follow-up message.
 
 ```bash
@@ -1181,6 +1294,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/m
 ```
 
 #### GET /api/v1/users/{userId}/conversations/{conversationId}/messages
+
 Poll for messages. Check `processing` flag to know if the agent is still working.
 
 ```bash
@@ -1189,12 +1303,23 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/messages
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
     "messages": [
-      { "messageId": "...", "role": "user", "content": "...", "createdAt": "..." },
-      { "messageId": "...", "role": "assistant", "content": "...", "createdAt": "..." }
+      {
+        "messageId": "...",
+        "role": "user",
+        "content": "...",
+        "createdAt": "..."
+      },
+      {
+        "messageId": "...",
+        "role": "assistant",
+        "content": "...",
+        "createdAt": "..."
+      }
     ],
     "processing": false
   },
@@ -1203,6 +1328,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/messages
 ```
 
 **Polling pattern:**
+
 1. Send a message (POST).
 2. Poll GET messages every 2-3 seconds.
 3. When `processing` is `false`, the agent has finished responding.
@@ -1212,6 +1338,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/messages
 ### Portfolio
 
 #### GET /api/v1/wallets/{walletId}/holdings
+
 Get current token holdings for a wallet.
 
 ```bash
@@ -1220,6 +1347,7 @@ curl {{BASE_URL}}/api/v1/wallets/{walletId}/holdings \
 ```
 
 #### GET /api/v1/wallets/{walletId}/transactions
+
 Get all transactions for a wallet.
 
 ```bash
@@ -1228,6 +1356,7 @@ curl "{{BASE_URL}}/api/v1/wallets/{walletId}/transactions?page=1&pageSize=25" \
 ```
 
 #### GET /api/v1/wallets/{walletId}/executed-transactions
+
 Get executed transactions (order-linked trades) for a wallet. Uses cursor-based pagination.
 
 ```bash
@@ -1248,6 +1377,7 @@ curl "{{BASE_URL}}/api/v1/wallets/{walletId}/executed-transactions?limit=25&curs
 | `token` | string | Filter by token address |
 
 #### GET /api/v1/users/{userId}/positions
+
 Get positions with PnL data.
 
 ```bash
@@ -1261,6 +1391,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/positions?status=active&page=1&pageSize
 | `status` | `active`, `pending`, `not_active` |
 
 #### POST /api/v1/users/{userId}/positions/{thesisId}/close
+
 Close a single position. Cancels pending orders and creates a sell order for remaining holdings.
 
 ```bash
@@ -1269,6 +1400,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/positions/{thesisId}/close \
 ```
 
 #### POST /api/v1/users/{userId}/positions/close-all
+
 Close **all** active and pending positions for a user. Each position is closed independently — partial failures don't block other positions.
 
 ```bash
@@ -1277,20 +1409,20 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/positions/close-all \
 ```
 
 **Response:**
+
 ```json
 {
   "data": {
     "successes": [
       { "thesisId": "...", "cancelled": 2, "sellOrderCreated": true }
     ],
-    "failures": [
-      { "thesisId": "...", "error": "No wallet found" }
-    ]
+    "failures": [{ "thesisId": "...", "error": "No wallet found" }]
   }
 }
 ```
 
 #### GET /api/v1/users/{userId}/diary-logs
+
 Get auto-trade diary logs.
 
 ```bash
@@ -1305,6 +1437,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/diary-logs?page=1&pageSize=25" \
 Rate limits are enforced across endpoints. Effective thresholds vary by endpoint and request context and may be adjusted over time.
 
 Rate limit rejections return `429 Too Many Requests` with:
+
 - `error.code = "rate_limit_exceeded"`
 - `Retry-After` header (seconds)
 - `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers
@@ -1314,26 +1447,29 @@ Retry behavior: back off and retry only after `Retry-After` elapses.
 ## Pagination
 
 All list endpoints support pagination:
+
 - `page` - Page number (default: 1, max: 100)
 - `pageSize` - Items per page (default: 25, max: 100)
 
 Response includes `meta`:
+
 ```json
 { "meta": { "page": 1, "pageSize": 25, "total": 100, "pages": 4 } }
 ```
 
 ## Error Codes
 
-| Status | Code | Description |
-|--------|------|-------------|
-| 400 | `bad_request` | Invalid input, missing fields, validation error |
-| 401 | `unauthorized` | Missing or invalid API key |
-| 404 | `not_found` | Resource not found |
-| 409 | `error` | Conflict (e.g., user already exists) |
-| 429 | `rate_limit_exceeded` | Rate limit exceeded |
-| 500 | `internal_error` | Unexpected server error |
+| Status | Code                  | Description                                     |
+| ------ | --------------------- | ----------------------------------------------- |
+| 400    | `bad_request`         | Invalid input, missing fields, validation error |
+| 401    | `unauthorized`        | Missing or invalid API key                      |
+| 404    | `not_found`           | Resource not found                              |
+| 409    | `error`               | Conflict (e.g., user already exists)            |
+| 429    | `rate_limit_exceeded` | Rate limit exceeded                             |
+| 500    | `internal_error`      | Unexpected server error                         |
 
 **Error response format:**
+
 ```json
 {
   "error": {

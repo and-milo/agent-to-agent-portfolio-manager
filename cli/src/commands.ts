@@ -1,8 +1,8 @@
-import crypto from 'node:crypto';
-import type { ConversationOverageAsset, PartnerApiClient } from './client.js';
-import type { MiloConfig } from './config.js';
-import { saveConfig } from './config.js';
-import { base58Decode, base58Encode } from './base58.js';
+import crypto from "node:crypto";
+import type { ConversationOverageAsset, PartnerApiClient } from "./client.js";
+import type { MiloConfig } from "./config.js";
+import { saveConfig } from "./config.js";
+import { base58Decode, base58Encode } from "./base58.js";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -25,7 +25,11 @@ export interface CommandDef {
 
 // ── Helpers ───────────────────────────────────────────────────────
 
-function requireFlag(flags: Record<string, string | undefined>, name: string, configFallback?: string): string {
+function requireFlag(
+  flags: Record<string, string | undefined>,
+  name: string,
+  configFallback?: string,
+): string {
   const val = flags[name] ?? configFallback;
   if (!val) throw new Error(`Missing required flag --${name}`);
   return val;
@@ -40,29 +44,32 @@ function parseJson(value: string | undefined, name: string): unknown {
   }
 }
 
-const SOLANA_MAINNET_CHAIN_ID = 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
+const SOLANA_MAINNET_CHAIN_ID = "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp";
 const MAX_PAGE_VALUE = 100;
 const MAX_PAGE_SIZE_VALUE = 100;
 const MAX_TAKE_PROFITS = 5;
 const MAX_STOP_LOSSES = 5;
 const MAX_TOTAL_DEPENDANTS = 8;
 export const PARTNER_CANONICAL_MODEL_VERSIONS = [
-  'o3',
-  'gemini-3-pro',
-  'gemini-3.1-pro-preview',
-  'gpt-5.2-high',
-  'gpt-5.2-xh',
-  'gpt-5.4',
-  'grok-4.1-fast-reasoning',
-  'grok-4',
-  'claude-opus-4.5',
-  'claude-opus-4.6',
+  "o3",
+  "gemini-3-pro",
+  "gemini-3.1-pro-preview",
+  "gpt-5.2-high",
+  "gpt-5.2-xh",
+  "gpt-5.4",
+  "grok-4.1-fast-reasoning",
+  "grok-4",
+  "claude-opus-4.5",
+  "claude-opus-4.6",
 ] as const;
 const PARTNER_CANONICAL_MODEL_VERSION_SET = new Set<string>(
   PARTNER_CANONICAL_MODEL_VERSIONS,
 );
 
-function parseOptionalJsonArray(value: unknown, flagName: string): unknown[] | undefined {
+function parseOptionalJsonArray(
+  value: unknown,
+  flagName: string,
+): unknown[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) {
     throw new Error(`--${flagName} must be a JSON array`);
@@ -74,18 +81,14 @@ export function validateCreateOrderDependants(
   takeProfits: unknown,
   stopLosses: unknown,
 ): void {
-  const tp = parseOptionalJsonArray(takeProfits, 'take-profits-json') ?? [];
-  const sl = parseOptionalJsonArray(stopLosses, 'stop-losses-json') ?? [];
+  const tp = parseOptionalJsonArray(takeProfits, "take-profits-json") ?? [];
+  const sl = parseOptionalJsonArray(stopLosses, "stop-losses-json") ?? [];
 
   if (tp.length > MAX_TAKE_PROFITS) {
-    throw new Error(
-      `takeProfits cannot exceed ${MAX_TAKE_PROFITS} entries`,
-    );
+    throw new Error(`takeProfits cannot exceed ${MAX_TAKE_PROFITS} entries`);
   }
   if (sl.length > MAX_STOP_LOSSES) {
-    throw new Error(
-      `stopLosses cannot exceed ${MAX_STOP_LOSSES} entries`,
-    );
+    throw new Error(`stopLosses cannot exceed ${MAX_STOP_LOSSES} entries`);
   }
   if (tp.length + sl.length > MAX_TOTAL_DEPENDANTS) {
     throw new Error(
@@ -94,7 +97,11 @@ export function validateCreateOrderDependants(
   }
 }
 
-function validateOptionalPositiveInt(flagName: string, value: string | undefined, max: number) {
+function validateOptionalPositiveInt(
+  flagName: string,
+  value: string | undefined,
+  max: number,
+) {
   if (value === undefined) return;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) {
@@ -105,29 +112,36 @@ function validateOptionalPositiveInt(flagName: string, value: string | undefined
   }
 }
 
-export function validatePagingFlags(page: string | undefined, pageSize: string | undefined): void {
-  validateOptionalPositiveInt('page', page, MAX_PAGE_VALUE);
-  validateOptionalPositiveInt('page-size', pageSize, MAX_PAGE_SIZE_VALUE);
+export function validatePagingFlags(
+  page: string | undefined,
+  pageSize: string | undefined,
+): void {
+  validateOptionalPositiveInt("page", page, MAX_PAGE_VALUE);
+  validateOptionalPositiveInt("page-size", pageSize, MAX_PAGE_SIZE_VALUE);
 }
 
-function parseConversationOverageAsset(value: string | undefined): ConversationOverageAsset {
-  const normalized = (value ?? 'USDC').toUpperCase();
-  if (normalized !== 'USDC' && normalized !== 'SOL') {
-    throw new Error('--payment-asset must be either USDC or SOL');
+function parseConversationOverageAsset(
+  value: string | undefined,
+): ConversationOverageAsset {
+  const normalized = (value ?? "USDC").toUpperCase();
+  if (normalized !== "USDC" && normalized !== "SOL") {
+    throw new Error("--payment-asset must be either USDC or SOL");
   }
   return normalized as ConversationOverageAsset;
 }
 
 function buildOveragePaymentOpts(flags: Record<string, string | undefined>) {
-  const raw = flags['pay-overage'];
-  if (raw === undefined || raw === 'false') return undefined;
-  const txSignature = flags['payment-tx-signature']?.trim();
+  const raw = flags["pay-overage"];
+  if (raw === undefined || raw === "false") return undefined;
+  const txSignature = flags["payment-tx-signature"]?.trim();
   if (!txSignature) {
-    throw new Error('--payment-tx-signature is required when --pay-overage is enabled');
+    throw new Error(
+      "--payment-tx-signature is required when --pay-overage is enabled",
+    );
   }
   return {
     enabled: true,
-    asset: parseConversationOverageAsset(flags['payment-asset']),
+    asset: parseConversationOverageAsset(flags["payment-asset"]),
     txSignature,
   };
 }
@@ -138,12 +152,12 @@ export function parseModelVersionFlag(
   if (value === undefined) return undefined;
   const trimmed = value.trim();
   if (!trimmed) {
-    throw new Error('--model-version cannot be empty');
+    throw new Error("--model-version cannot be empty");
   }
-  if (trimmed.toLowerCase() === 'null') return null;
+  if (trimmed.toLowerCase() === "null") return null;
   if (!PARTNER_CANONICAL_MODEL_VERSION_SET.has(trimmed)) {
     throw new Error(
-      `--model-version must be one of: ${PARTNER_CANONICAL_MODEL_VERSIONS.join(', ')}, or "null"`,
+      `--model-version must be one of: ${PARTNER_CANONICAL_MODEL_VERSIONS.join(", ")}, or "null"`,
     );
   }
   return trimmed;
@@ -156,29 +170,43 @@ export const COMMANDS: CommandDef[] = [
   // ── Signup ────────────────────────────────────────────────────
 
   {
-    name: 'signup',
+    name: "signup",
     description:
-      'Register a new user via SIWX wallet verification (auto-signs with --secret-key)',
+      "Register a new user via SIWX wallet verification (auto-signs with --secret-key)",
     flags: [
-      { name: 'wallet-address', description: 'Solana wallet address', required: true },
-      { name: 'secret-key', description: 'Base58-encoded ed25519 secret key (or MILO_SECRET_KEY env)' },
-      { name: 'chain-id', description: `Chain ID (default: ${SOLANA_MAINNET_CHAIN_ID})` },
-      { name: 'invite-code', description: 'Optional invite code' },
+      {
+        name: "wallet-address",
+        description: "Solana wallet address",
+        required: true,
+      },
+      {
+        name: "secret-key",
+        description:
+          "Base58-encoded ed25519 secret key (or MILO_SECRET_KEY env)",
+      },
+      {
+        name: "chain-id",
+        description: `Chain ID (default: ${SOLANA_MAINNET_CHAIN_ID})`,
+      },
+      { name: "invite-code", description: "Optional invite code" },
     ],
     handler: async (flags, client, config) => {
-      const walletAddress = requireFlag(flags, 'wallet-address');
-      const secretKeyStr = flags['secret-key'] ?? process.env['MILO_SECRET_KEY'];
+      const walletAddress = requireFlag(flags, "wallet-address");
+      const secretKeyStr =
+        flags["secret-key"] ?? process.env["MILO_SECRET_KEY"];
       if (!secretKeyStr) {
-        throw new Error('Missing --secret-key or MILO_SECRET_KEY env var (base58-encoded ed25519 secret key)');
+        throw new Error(
+          "Missing --secret-key or MILO_SECRET_KEY env var (base58-encoded ed25519 secret key)",
+        );
       }
-      const chainId = flags['chain-id'] ?? SOLANA_MAINNET_CHAIN_ID;
+      const chainId = flags["chain-id"] ?? SOLANA_MAINNET_CHAIN_ID;
 
       // Step 1: Get SIWX message from server
-      const siwxResult = await client.createSiwxMessage({
+      const siwxResult = (await client.createSiwxMessage({
         accountAddress: walletAddress,
         chainId,
-        ...(flags['invite-code'] ? { inviteCode: flags['invite-code'] } : {}),
-      }) as { data: { data: Record<string, unknown>; message: string } };
+        ...(flags["invite-code"] ? { inviteCode: flags["invite-code"] } : {}),
+      })) as { data: { data: Record<string, unknown>; message: string } };
 
       const { data: siwxData, message: siwxMessage } = siwxResult.data;
 
@@ -189,22 +217,22 @@ export const COMMANDS: CommandDef[] = [
       const messageBytes = new TextEncoder().encode(siwxMessage);
       const signatureBytes = crypto.sign(null, messageBytes, {
         key: Buffer.from(secretKey),
-        format: 'raw' as any,
-        type: 'ed25519' as any,
+        format: "raw" as any,
+        type: "ed25519" as any,
       } as any);
       const signature = base58Encode(new Uint8Array(signatureBytes));
 
       // Step 3: Register
-      const result = await client.signup({
+      const result = (await client.signup({
         signupWallet: walletAddress,
         siwx: { data: siwxData, message: siwxMessage, signature },
-      }) as any;
+      })) as any;
 
       // Step 4: Save credentials
       const apiKey = result?.data?.apiKey ?? result?.apiKey;
       const userId = result?.data?.user?.id;
       const wallets = result?.data?.wallets ?? [];
-      const miloWallet = wallets.find((w: any) => w.type === 'milo');
+      const miloWallet = wallets.find((w: any) => w.type === "milo");
 
       const newConfig: MiloConfig = { ...config };
       if (apiKey) newConfig.api_key = apiKey;
@@ -223,8 +251,9 @@ export const COMMANDS: CommandDef[] = [
   // ── Me ───────────────────────────────────────────────────────
 
   {
-    name: 'me',
-    description: 'Get current user profile and wallets for the authenticated API key',
+    name: "me",
+    description:
+      "Get current user profile and wallets for the authenticated API key",
     flags: [],
     handler: async (_flags, client) => {
       return client.getMe();
@@ -234,13 +263,13 @@ export const COMMANDS: CommandDef[] = [
   // ── Holdings ──────────────────────────────────────────────────
 
   {
-    name: 'get-holdings',
-    description: 'Get token holdings for a wallet',
+    name: "get-holdings",
+    description: "Get token holdings for a wallet",
     flags: [
-      { name: 'wallet-id', description: 'Wallet ID (default: from config)' },
+      { name: "wallet-id", description: "Wallet ID (default: from config)" },
     ],
     handler: async (flags, client, config) => {
-      const walletId = requireFlag(flags, 'wallet-id', config.wallet_id);
+      const walletId = requireFlag(flags, "wallet-id", config.wallet_id);
       return client.getHoldings(walletId);
     },
   },
@@ -248,39 +277,39 @@ export const COMMANDS: CommandDef[] = [
   // ── Transactions ──────────────────────────────────────────────
 
   {
-    name: 'transactions',
-    description: 'List wallet transactions',
+    name: "transactions",
+    description: "List wallet transactions",
     flags: [
-      { name: 'wallet-id', description: 'Wallet ID (default: from config)' },
-      { name: 'limit', description: 'Items per page (default: 25, max: 200)' },
-      { name: 'cursor', description: 'Cursor for pagination' },
+      { name: "wallet-id", description: "Wallet ID (default: from config)" },
+      { name: "limit", description: "Items per page (default: 25, max: 200)" },
+      { name: "cursor", description: "Cursor for pagination" },
     ],
     handler: async (flags, client, config) => {
-      const walletId = requireFlag(flags, 'wallet-id', config.wallet_id);
+      const walletId = requireFlag(flags, "wallet-id", config.wallet_id);
       return client.getTransactions(walletId, {
-        limit: flags['limit'],
-        cursor: flags['cursor'],
+        limit: flags["limit"],
+        cursor: flags["cursor"],
       });
     },
   },
 
   {
-    name: 'executed-transactions',
-    description: 'Get executed (order-linked) transactions',
+    name: "executed-transactions",
+    description: "Get executed (order-linked) transactions",
     flags: [
-      { name: 'wallet-id', description: 'Wallet ID (default: from config)' },
-      { name: 'limit', description: 'Items per page (default: 25, max: 200)' },
-      { name: 'cursor', description: 'Cursor for pagination' },
-      { name: 'tx-type', description: 'Filter by buy or sell' },
-      { name: 'token', description: 'Filter by token address' },
+      { name: "wallet-id", description: "Wallet ID (default: from config)" },
+      { name: "limit", description: "Items per page (default: 25, max: 200)" },
+      { name: "cursor", description: "Cursor for pagination" },
+      { name: "tx-type", description: "Filter by buy or sell" },
+      { name: "token", description: "Filter by token address" },
     ],
     handler: async (flags, client, config) => {
-      const walletId = requireFlag(flags, 'wallet-id', config.wallet_id);
+      const walletId = requireFlag(flags, "wallet-id", config.wallet_id);
       return client.getExecutedTransactions(walletId, {
-        limit: flags['limit'],
-        cursor: flags['cursor'],
-        txType: flags['tx-type'],
-        token: flags['token'],
+        limit: flags["limit"],
+        cursor: flags["cursor"],
+        txType: flags["tx-type"],
+        token: flags["token"],
       });
     },
   },
@@ -288,47 +317,48 @@ export const COMMANDS: CommandDef[] = [
   // ── Positions ─────────────────────────────────────────────────
 
   {
-    name: 'list-positions',
-    description: 'List investment positions with PnL data',
+    name: "list-positions",
+    description: "List investment positions with PnL data",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'status', description: 'Filter: active, pending, not_active' },
-      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
-      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
+      { name: "user-id", description: "User ID (default: from config)" },
+      { name: "status", description: "Filter: active, pending, not_active" },
+      { name: "page", description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      {
+        name: "page-size",
+        description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})`,
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      validatePagingFlags(flags['page'], flags['page-size']);
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      validatePagingFlags(flags["page"], flags["page-size"]);
       return client.listPositions(userId, {
-        status: flags['status'],
-        page: flags['page'],
-        pageSize: flags['page-size'],
+        status: flags["status"],
+        page: flags["page"],
+        pageSize: flags["page-size"],
       });
     },
   },
 
   {
-    name: 'close-position',
-    description: 'Close a position (cancels pending orders, sells remaining)',
+    name: "close-position",
+    description: "Close a position (cancels pending orders, sells remaining)",
     flags: [
-      { name: 'thesis-id', description: 'Position thesis ID', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: "thesis-id", description: "Position thesis ID", required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const thesisId = requireFlag(flags, 'thesis-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const thesisId = requireFlag(flags, "thesis-id");
       return client.closePosition(userId, thesisId);
     },
   },
 
   {
-    name: 'close-all-positions',
-    description: 'Close all active and pending positions',
-    flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-    ],
+    name: "close-all-positions",
+    description: "Close all active and pending positions",
+    flags: [{ name: "user-id", description: "User ID (default: from config)" }],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
+      const userId = requireFlag(flags, "user-id", config.user_id);
       return client.closeAllPositions(userId);
     },
   },
@@ -336,41 +366,52 @@ export const COMMANDS: CommandDef[] = [
   // ── Orders ────────────────────────────────────────────────────
 
   {
-    name: 'create-order',
+    name: "create-order",
     description:
-      'Create a buy or sell order with optional TP/SL; validation errors may include error.details.validationIssues',
+      "Create a buy or sell order with optional TP/SL; backend execution now routes through DFlow + Helius Sender while payload validation stays the same",
     flags: [
-      { name: 'wallet-id', description: 'Wallet ID (default: from config)' },
-      { name: 'token-address', description: 'Token mint address', required: true },
-      { name: 'type', description: 'buy or sell', required: true },
+      { name: "wallet-id", description: "Wallet ID (default: from config)" },
       {
-        name: 'payload-json',
-        description:
-          'Order payload JSON (amount, trigger, execution); schema errors can include error.details.validationIssues',
+        name: "token-address",
+        description: "Token mint address",
         required: true,
       },
-      { name: 'status', description: 'active or draft (default: active)' },
-      { name: 'position-thesis-id', description: 'Link to a position thesis' },
-      { name: 'take-profits-json', description: `Take-profit ladder JSON array (max ${MAX_TAKE_PROFITS})` },
-      { name: 'stop-losses-json', description: `Stop-loss ladder JSON array (max ${MAX_STOP_LOSSES})` },
+      { name: "type", description: "buy or sell", required: true },
       {
-        name: 'expires-at',
+        name: "payload-json",
         description:
-          'Expiration time (ISO 8601; required for market orders and must be within 120 minutes)',
+          "Order payload JSON (amount, trigger, execution); backend execution uses DFlow + Helius Sender, and schema errors can include error.details.validationIssues",
+        required: true,
+      },
+      { name: "status", description: "active or draft (default: active)" },
+      { name: "position-thesis-id", description: "Link to a position thesis" },
+      {
+        name: "take-profits-json",
+        description: `Take-profit ladder JSON array (max ${MAX_TAKE_PROFITS})`,
+      },
+      {
+        name: "stop-losses-json",
+        description: `Stop-loss ladder JSON array (max ${MAX_STOP_LOSSES})`,
+      },
+      {
+        name: "expires-at",
+        description:
+          "Expiration time (ISO 8601; required for market orders and must be within 120 minutes)",
       },
     ],
     handler: async (flags, client, config) => {
-      const walletId = requireFlag(flags, 'wallet-id', config.wallet_id);
+      const walletId = requireFlag(flags, "wallet-id", config.wallet_id);
       const body: Record<string, unknown> = {
-        tokenAddress: requireFlag(flags, 'token-address'),
-        type: requireFlag(flags, 'type'),
-        payload: parseJson(flags['payload-json'], 'payload-json'),
+        tokenAddress: requireFlag(flags, "token-address"),
+        type: requireFlag(flags, "type"),
+        payload: parseJson(flags["payload-json"], "payload-json"),
       };
-      if (flags['status']) body.status = flags['status'];
-      if (flags['position-thesis-id']) body.positionThesisId = flags['position-thesis-id'];
-      if (flags['expires-at']) body.expiresAt = flags['expires-at'];
-      const tp = parseJson(flags['take-profits-json'], 'take-profits-json');
-      const sl = parseJson(flags['stop-losses-json'], 'stop-losses-json');
+      if (flags["status"]) body.status = flags["status"];
+      if (flags["position-thesis-id"])
+        body.positionThesisId = flags["position-thesis-id"];
+      if (flags["expires-at"]) body.expiresAt = flags["expires-at"];
+      const tp = parseJson(flags["take-profits-json"], "take-profits-json");
+      const sl = parseJson(flags["stop-losses-json"], "stop-losses-json");
       validateCreateOrderDependants(tp, sl);
       if (tp !== undefined) body.takeProfits = tp;
       if (sl !== undefined) body.stopLosses = sl;
@@ -379,81 +420,87 @@ export const COMMANDS: CommandDef[] = [
   },
 
   {
-    name: 'list-orders',
-    description: 'List orders with optional filters',
+    name: "list-orders",
+    description: "List orders with optional filters",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'status', description: 'active, paused, error, fulfilled, archived, draft' },
-      { name: 'type', description: 'buy or sell' },
-      { name: 'token-address', description: 'Filter by token' },
-      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
-      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
+      { name: "user-id", description: "User ID (default: from config)" },
+      {
+        name: "status",
+        description: "active, paused, error, fulfilled, archived, draft",
+      },
+      { name: "type", description: "buy or sell" },
+      { name: "token-address", description: "Filter by token" },
+      { name: "page", description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      {
+        name: "page-size",
+        description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})`,
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      validatePagingFlags(flags['page'], flags['page-size']);
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      validatePagingFlags(flags["page"], flags["page-size"]);
       return client.listOrders(userId, {
-        status: flags['status'],
-        type: flags['type'],
-        tokenAddress: flags['token-address'],
-        page: flags['page'],
-        pageSize: flags['page-size'],
+        status: flags["status"],
+        type: flags["type"],
+        tokenAddress: flags["token-address"],
+        page: flags["page"],
+        pageSize: flags["page-size"],
       });
     },
   },
 
   {
-    name: 'get-order',
-    description: 'Get details of a specific order',
+    name: "get-order",
+    description: "Get details of a specific order",
     flags: [
-      { name: 'order-id', description: 'Order ID', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: "order-id", description: "Order ID", required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const orderId = requireFlag(flags, 'order-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const orderId = requireFlag(flags, "order-id");
       return client.getOrder(userId, orderId);
     },
   },
 
   {
-    name: 'pause-order',
-    description: 'Pause an active order',
+    name: "pause-order",
+    description: "Pause an active order",
     flags: [
-      { name: 'order-id', description: 'Order ID', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: "order-id", description: "Order ID", required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const orderId = requireFlag(flags, 'order-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const orderId = requireFlag(flags, "order-id");
       return client.pauseOrder(userId, orderId);
     },
   },
 
   {
-    name: 'activate-order',
-    description: 'Activate a draft or paused order',
+    name: "activate-order",
+    description: "Activate a draft or paused order",
     flags: [
-      { name: 'order-id', description: 'Order ID', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: "order-id", description: "Order ID", required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const orderId = requireFlag(flags, 'order-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const orderId = requireFlag(flags, "order-id");
       return client.activateOrder(userId, orderId);
     },
   },
 
   {
-    name: 'delete-order',
-    description: 'Archive (delete) an order',
+    name: "delete-order",
+    description: "Archive (delete) an order",
     flags: [
-      { name: 'order-id', description: 'Order ID', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: "order-id", description: "Order ID", required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const orderId = requireFlag(flags, 'order-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const orderId = requireFlag(flags, "order-id");
       return client.deleteOrder(userId, orderId);
     },
   },
@@ -461,21 +508,29 @@ export const COMMANDS: CommandDef[] = [
   // ── Wallet Actions ────────────────────────────────────────────
 
   {
-    name: 'send-tokens',
+    name: "send-tokens",
     description:
-      'Send tokens from your Milo wallet (wallet-id path value is authoritative)',
+      "Send tokens from your Milo wallet (wallet-id path value is authoritative)",
     flags: [
-      { name: 'wallet-id', description: 'Wallet ID (default: from config)' },
-      { name: 'recipient', description: 'Recipient Solana address', required: true },
-      { name: 'token', description: 'Token mint address', required: true },
-      { name: 'amount', description: 'Amount to send (e.g. 1.5)', required: true },
+      { name: "wallet-id", description: "Wallet ID (default: from config)" },
+      {
+        name: "recipient",
+        description: "Recipient Solana address",
+        required: true,
+      },
+      { name: "token", description: "Token mint address", required: true },
+      {
+        name: "amount",
+        description: "Amount to send (e.g. 1.5)",
+        required: true,
+      },
     ],
     handler: async (flags, client, config) => {
-      const walletId = requireFlag(flags, 'wallet-id', config.wallet_id);
+      const walletId = requireFlag(flags, "wallet-id", config.wallet_id);
       return client.sendTokens(walletId, {
-        recipient: requireFlag(flags, 'recipient'),
-        token: requireFlag(flags, 'token'),
-        amount: Number(requireFlag(flags, 'amount')),
+        recipient: requireFlag(flags, "recipient"),
+        token: requireFlag(flags, "token"),
+        amount: Number(requireFlag(flags, "amount")),
       });
     },
   },
@@ -483,69 +538,90 @@ export const COMMANDS: CommandDef[] = [
   // ── AutoTrade Settings ────────────────────────────────────────
 
   {
-    name: 'get-settings',
-    description: 'Get current auto-trade configuration',
-    flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-    ],
+    name: "get-settings",
+    description: "Get current auto-trade configuration",
+    flags: [{ name: "user-id", description: "User ID (default: from config)" }],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
+      const userId = requireFlag(flags, "user-id", config.user_id);
       return client.getAutoTradeSettings(userId);
     },
   },
 
   {
-    name: 'update-settings',
-    description: 'Update auto-trade configuration',
+    name: "update-settings",
+    description: "Update auto-trade configuration",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'is-active', description: 'Enable (true) or disable (false) auto-trading' },
-      { name: 'risk-tolerance', description: 'conservative, balanced, or degen' },
-      { name: 'strategy', description: 'VALUE INVESTOR, SWING TRADER, SCALPER, or CUSTOM' },
-      { name: 'strategy-id', description: 'Link to a saved strategy (UUID)' },
+      { name: "user-id", description: "User ID (default: from config)" },
       {
-        name: 'model-version',
-        description: `Preferred model (or "null" to clear). Only canonical public ids are accepted: ${PARTNER_CANONICAL_MODEL_VERSIONS.join(', ')}. If unavailable for the account, the API returns 400 with a plan-specific Stripe upgrade link.`,
+        name: "is-active",
+        description: "Enable (true) or disable (false) auto-trading",
       },
-      { name: 'instructions', description: 'Free-text trading instructions' },
-      { name: 'allocation-json', description: 'Asset class allocation JSON (e.g. \'{"majors":40,"memes":20}\')' },
-      { name: 'custom-tickers-json', description: 'Custom tickers JSON array (e.g. \'["SOL","JUP"]\')' },
       {
-        name: 'data-sources-json',
+        name: "risk-tolerance",
+        description: "conservative, balanced, or degen",
+      },
+      {
+        name: "strategy",
+        description: "VALUE INVESTOR, SWING TRADER, SCALPER, or CUSTOM",
+      },
+      { name: "strategy-id", description: "Link to a saved strategy (UUID)" },
+      {
+        name: "model-version",
+        description: `Preferred model (or "null" to clear). Only canonical public ids are accepted: ${PARTNER_CANONICAL_MODEL_VERSIONS.join(", ")}. If unavailable for the account, the API returns 400 with a plan-specific Stripe upgrade link.`,
+      },
+      { name: "instructions", description: "Free-text trading instructions" },
+      {
+        name: "allocation-json",
+        description:
+          'Asset class allocation JSON (e.g. \'{"majors":40,"memes":20}\')',
+      },
+      {
+        name: "custom-tickers-json",
+        description: 'Custom tickers JSON array (e.g. \'["SOL","JUP"]\')',
+      },
+      {
+        name: "data-sources-json",
         description:
           'Global data-source settings JSON (or "null" to clear). Supported keys: fundingRates, openInterest, liquidationData, macroData. Only Pro and Max can change these settings.',
       },
       {
-        name: 'asset-class-settings-json',
+        name: "asset-class-settings-json",
         description:
           'Per-asset-class settings JSON (or "null" to clear), including nested dataSources overrides.',
       },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
+      const userId = requireFlag(flags, "user-id", config.user_id);
       const body: Record<string, unknown> = {};
-      if (flags['is-active'] !== undefined) body.isActive = flags['is-active'] === 'true';
-      if (flags['risk-tolerance']) body.riskTolerance = flags['risk-tolerance'];
-      if (flags['strategy']) body.strategy = flags['strategy'];
-      if (flags['strategy-id']) body.strategyId = flags['strategy-id'];
-      const modelVersion = parseModelVersionFlag(flags['model-version']);
+      if (flags["is-active"] !== undefined)
+        body.isActive = flags["is-active"] === "true";
+      if (flags["risk-tolerance"]) body.riskTolerance = flags["risk-tolerance"];
+      if (flags["strategy"]) body.strategy = flags["strategy"];
+      if (flags["strategy-id"]) body.strategyId = flags["strategy-id"];
+      const modelVersion = parseModelVersionFlag(flags["model-version"]);
       if (modelVersion !== undefined) body.modelVersion = modelVersion;
-      if (flags['instructions']) body.instructions = flags['instructions'];
-      const allocation = parseJson(flags['allocation-json'], 'allocation-json');
+      if (flags["instructions"]) body.instructions = flags["instructions"];
+      const allocation = parseJson(flags["allocation-json"], "allocation-json");
       if (allocation) body.allocation = allocation;
-      const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
+      const tickers = parseJson(
+        flags["custom-tickers-json"],
+        "custom-tickers-json",
+      );
       if (tickers) body.customTickers = tickers;
-      if (flags['data-sources-json'] !== undefined) {
-        body.dataSources = parseJson(flags['data-sources-json'], 'data-sources-json');
+      if (flags["data-sources-json"] !== undefined) {
+        body.dataSources = parseJson(
+          flags["data-sources-json"],
+          "data-sources-json",
+        );
       }
-      if (flags['asset-class-settings-json'] !== undefined) {
+      if (flags["asset-class-settings-json"] !== undefined) {
         body.assetClassSettings = parseJson(
-          flags['asset-class-settings-json'],
-          'asset-class-settings-json',
+          flags["asset-class-settings-json"],
+          "asset-class-settings-json",
         );
       }
       if (Object.keys(body).length === 0) {
-        throw new Error('At least one setting flag must be provided');
+        throw new Error("At least one setting flag must be provided");
       }
       return client.updateAutoTradeSettings(userId, body);
     },
@@ -554,164 +630,191 @@ export const COMMANDS: CommandDef[] = [
   // ── Strategies ────────────────────────────────────────────────
 
   {
-    name: 'list-strategies',
-    description: 'List autotrade strategies',
+    name: "list-strategies",
+    description: "List autotrade strategies",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'scope', description: 'all, owned, or public' },
-      { name: 'q', description: 'Search query' },
-      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
-      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
+      { name: "user-id", description: "User ID (default: from config)" },
+      { name: "scope", description: "all, owned, or public" },
+      { name: "q", description: "Search query" },
+      { name: "page", description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      {
+        name: "page-size",
+        description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})`,
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      validatePagingFlags(flags['page'], flags['page-size']);
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      validatePagingFlags(flags["page"], flags["page-size"]);
       return client.listStrategies(userId, {
-        scope: flags['scope'],
-        q: flags['q'],
-        page: flags['page'],
-        pageSize: flags['page-size'],
+        scope: flags["scope"],
+        q: flags["q"],
+        page: flags["page"],
+        pageSize: flags["page-size"],
       });
     },
   },
 
   {
-    name: 'get-strategy',
-    description: 'Get details of a strategy',
+    name: "get-strategy",
+    description: "Get details of a strategy",
     flags: [
-      { name: 'strategy-id', description: 'Strategy ID', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: "strategy-id", description: "Strategy ID", required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const strategyId = requireFlag(flags, 'strategy-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const strategyId = requireFlag(flags, "strategy-id");
       return client.getStrategy(userId, strategyId);
     },
   },
 
   {
-    name: 'create-strategy',
-    description: 'Create a new autotrade strategy',
+    name: "create-strategy",
+    description: "Create a new autotrade strategy",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'name', description: 'Strategy name', required: true },
-      { name: 'strategy', description: 'VALUE INVESTOR, SWING TRADER, SCALPER, or CUSTOM', required: true },
-      { name: 'description', description: 'Strategy description' },
-      { name: 'instructions', description: 'Trading instructions for the agent' },
-      { name: 'allocation-json', description: 'Asset class allocation JSON' },
-      { name: 'custom-tickers-json', description: 'Custom tickers JSON array' },
+      { name: "user-id", description: "User ID (default: from config)" },
+      { name: "name", description: "Strategy name", required: true },
       {
-        name: 'data-sources-json',
+        name: "strategy",
+        description: "VALUE INVESTOR, SWING TRADER, SCALPER, or CUSTOM",
+        required: true,
+      },
+      { name: "description", description: "Strategy description" },
+      {
+        name: "instructions",
+        description: "Trading instructions for the agent",
+      },
+      { name: "allocation-json", description: "Asset class allocation JSON" },
+      { name: "custom-tickers-json", description: "Custom tickers JSON array" },
+      {
+        name: "data-sources-json",
         description:
-          'Global data-source settings JSON. Supported keys: fundingRates, openInterest, liquidationData, macroData. Only Pro and Max can change these settings.',
+          "Global data-source settings JSON. Supported keys: fundingRates, openInterest, liquidationData, macroData. Only Pro and Max can change these settings.",
       },
       {
-        name: 'asset-class-settings-json',
+        name: "asset-class-settings-json",
         description:
-          'Per-asset-class settings JSON, including nested dataSources overrides.',
+          "Per-asset-class settings JSON, including nested dataSources overrides.",
       },
-      { name: 'is-public', description: 'Make publicly discoverable (true/false)' },
+      {
+        name: "is-public",
+        description: "Make publicly discoverable (true/false)",
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
+      const userId = requireFlag(flags, "user-id", config.user_id);
       const body: Record<string, unknown> = {
-        name: requireFlag(flags, 'name'),
-        strategy: requireFlag(flags, 'strategy'),
+        name: requireFlag(flags, "name"),
+        strategy: requireFlag(flags, "strategy"),
       };
-      if (flags['description']) body.description = flags['description'];
-      if (flags['instructions']) body.instructions = flags['instructions'];
-      const allocation = parseJson(flags['allocation-json'], 'allocation-json');
+      if (flags["description"]) body.description = flags["description"];
+      if (flags["instructions"]) body.instructions = flags["instructions"];
+      const allocation = parseJson(flags["allocation-json"], "allocation-json");
       if (allocation) body.allocation = allocation;
-      const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
+      const tickers = parseJson(
+        flags["custom-tickers-json"],
+        "custom-tickers-json",
+      );
       if (tickers) body.customTickers = tickers;
-      if (flags['data-sources-json'] !== undefined) {
-        body.dataSources = parseJson(flags['data-sources-json'], 'data-sources-json');
-      }
-      if (flags['asset-class-settings-json'] !== undefined) {
-        body.assetClassSettings = parseJson(
-          flags['asset-class-settings-json'],
-          'asset-class-settings-json',
+      if (flags["data-sources-json"] !== undefined) {
+        body.dataSources = parseJson(
+          flags["data-sources-json"],
+          "data-sources-json",
         );
       }
-      if (flags['is-public'] !== undefined) body.isPublic = flags['is-public'] === 'true';
+      if (flags["asset-class-settings-json"] !== undefined) {
+        body.assetClassSettings = parseJson(
+          flags["asset-class-settings-json"],
+          "asset-class-settings-json",
+        );
+      }
+      if (flags["is-public"] !== undefined)
+        body.isPublic = flags["is-public"] === "true";
       return client.createStrategy(userId, body);
     },
   },
 
   {
-    name: 'update-strategy',
-    description: 'Update an existing strategy',
+    name: "update-strategy",
+    description: "Update an existing strategy",
     flags: [
-      { name: 'strategy-id', description: 'Strategy ID', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'name', description: 'Strategy name' },
-      { name: 'strategy', description: 'Trading strategy type' },
-      { name: 'description', description: 'Strategy description' },
-      { name: 'instructions', description: 'Trading instructions' },
-      { name: 'allocation-json', description: 'Asset class allocation JSON' },
-      { name: 'custom-tickers-json', description: 'Custom tickers JSON array' },
+      { name: "strategy-id", description: "Strategy ID", required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
+      { name: "name", description: "Strategy name" },
+      { name: "strategy", description: "Trading strategy type" },
+      { name: "description", description: "Strategy description" },
+      { name: "instructions", description: "Trading instructions" },
+      { name: "allocation-json", description: "Asset class allocation JSON" },
+      { name: "custom-tickers-json", description: "Custom tickers JSON array" },
       {
-        name: 'data-sources-json',
+        name: "data-sources-json",
         description:
           'Global data-source settings JSON (or "null" to clear). Supported keys: fundingRates, openInterest, liquidationData, macroData. Only Pro and Max can change these settings.',
       },
       {
-        name: 'asset-class-settings-json',
+        name: "asset-class-settings-json",
         description:
           'Per-asset-class settings JSON (or "null" to clear), including nested dataSources overrides.',
       },
-      { name: 'is-public', description: 'Make public (true/false)' },
+      { name: "is-public", description: "Make public (true/false)" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const strategyId = requireFlag(flags, 'strategy-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const strategyId = requireFlag(flags, "strategy-id");
       const body: Record<string, unknown> = {};
-      if (flags['name']) body.name = flags['name'];
-      if (flags['strategy']) body.strategy = flags['strategy'];
-      if (flags['description']) body.description = flags['description'];
-      if (flags['instructions']) body.instructions = flags['instructions'];
-      const allocation = parseJson(flags['allocation-json'], 'allocation-json');
+      if (flags["name"]) body.name = flags["name"];
+      if (flags["strategy"]) body.strategy = flags["strategy"];
+      if (flags["description"]) body.description = flags["description"];
+      if (flags["instructions"]) body.instructions = flags["instructions"];
+      const allocation = parseJson(flags["allocation-json"], "allocation-json");
       if (allocation) body.allocation = allocation;
-      const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
+      const tickers = parseJson(
+        flags["custom-tickers-json"],
+        "custom-tickers-json",
+      );
       if (tickers) body.customTickers = tickers;
-      if (flags['data-sources-json'] !== undefined) {
-        body.dataSources = parseJson(flags['data-sources-json'], 'data-sources-json');
-      }
-      if (flags['asset-class-settings-json'] !== undefined) {
-        body.assetClassSettings = parseJson(
-          flags['asset-class-settings-json'],
-          'asset-class-settings-json',
+      if (flags["data-sources-json"] !== undefined) {
+        body.dataSources = parseJson(
+          flags["data-sources-json"],
+          "data-sources-json",
         );
       }
-      if (flags['is-public'] !== undefined) body.isPublic = flags['is-public'] === 'true';
+      if (flags["asset-class-settings-json"] !== undefined) {
+        body.assetClassSettings = parseJson(
+          flags["asset-class-settings-json"],
+          "asset-class-settings-json",
+        );
+      }
+      if (flags["is-public"] !== undefined)
+        body.isPublic = flags["is-public"] === "true";
       return client.updateStrategy(userId, strategyId, body);
     },
   },
 
   {
-    name: 'delete-strategy',
-    description: 'Delete a strategy',
+    name: "delete-strategy",
+    description: "Delete a strategy",
     flags: [
-      { name: 'strategy-id', description: 'Strategy ID', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: "strategy-id", description: "Strategy ID", required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const strategyId = requireFlag(flags, 'strategy-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const strategyId = requireFlag(flags, "strategy-id");
       return client.deleteStrategy(userId, strategyId);
     },
   },
 
   {
-    name: 'sync-strategy',
-    description: 'Re-sync auto-trade settings with a linked strategy',
+    name: "sync-strategy",
+    description: "Re-sync auto-trade settings with a linked strategy",
     flags: [
-      { name: 'strategy-id', description: 'Strategy ID', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: "strategy-id", description: "Strategy ID", required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const strategyId = requireFlag(flags, 'strategy-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const strategyId = requireFlag(flags, "strategy-id");
       return client.syncStrategy(userId, strategyId);
     },
   },
@@ -719,94 +822,146 @@ export const COMMANDS: CommandDef[] = [
   // ── Conversations ─────────────────────────────────────────────
 
   {
-    name: 'create-conversation',
-    description: 'Start a conversation with a Milo AI agent',
+    name: "create-conversation",
+    description: "Start a conversation with a Milo AI agent",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'message', description: 'Initial message', required: true },
-      { name: 'agent-type', description: 'market-analyst or auto-trader (default: market-analyst)' },
-      { name: 'pay-overage', description: 'Legacy conversation-write retry helper (default: false)' },
-      { name: 'payment-asset', description: 'Asset hint for --pay-overage legacy flow: USDC or SOL (default: USDC)' },
-      { name: 'payment-tx-signature', description: 'Transaction signature used by --pay-overage legacy flow (required with --pay-overage)' },
+      { name: "user-id", description: "User ID (default: from config)" },
+      { name: "message", description: "Initial message", required: true },
+      {
+        name: "agent-type",
+        description: "market-analyst or auto-trader (default: market-analyst)",
+      },
+      {
+        name: "pay-overage",
+        description: "Legacy conversation-write retry helper (default: false)",
+      },
+      {
+        name: "payment-asset",
+        description:
+          "Asset hint for --pay-overage legacy flow: USDC or SOL (default: USDC)",
+      },
+      {
+        name: "payment-tx-signature",
+        description:
+          "Transaction signature used by --pay-overage legacy flow (required with --pay-overage)",
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
+      const userId = requireFlag(flags, "user-id", config.user_id);
       const body: { message: string; agentType?: string } = {
-        message: requireFlag(flags, 'message'),
+        message: requireFlag(flags, "message"),
       };
-      if (flags['agent-type']) body.agentType = flags['agent-type'];
-      return client.createConversation(userId, body, buildOveragePaymentOpts(flags));
+      if (flags["agent-type"]) body.agentType = flags["agent-type"];
+      return client.createConversation(
+        userId,
+        body,
+        buildOveragePaymentOpts(flags),
+      );
     },
   },
 
   {
-    name: 'list-conversations',
-    description: 'List conversations',
+    name: "list-conversations",
+    description: "List conversations",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
-      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
+      { name: "user-id", description: "User ID (default: from config)" },
+      { name: "page", description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      {
+        name: "page-size",
+        description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})`,
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      validatePagingFlags(flags['page'], flags['page-size']);
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      validatePagingFlags(flags["page"], flags["page-size"]);
       return client.listConversations(userId, {
-        page: flags['page'],
-        pageSize: flags['page-size'],
+        page: flags["page"],
+        pageSize: flags["page-size"],
       });
     },
   },
 
   {
-    name: 'get-conversation',
-    description: 'Get conversation details',
+    name: "get-conversation",
+    description: "Get conversation details",
     flags: [
-      { name: 'conversation-id', description: 'Conversation ID', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
+      {
+        name: "conversation-id",
+        description: "Conversation ID",
+        required: true,
+      },
+      { name: "user-id", description: "User ID (default: from config)" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const conversationId = requireFlag(flags, 'conversation-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const conversationId = requireFlag(flags, "conversation-id");
       return client.getConversation(userId, conversationId);
     },
   },
 
   {
-    name: 'send-message',
-    description: 'Send a message to a conversation',
+    name: "send-message",
+    description: "Send a message to a conversation",
     flags: [
-      { name: 'conversation-id', description: 'Conversation ID', required: true },
-      { name: 'message', description: 'Message text', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'pay-overage', description: 'Legacy conversation-write retry helper (default: false)' },
-      { name: 'payment-asset', description: 'Asset hint for --pay-overage legacy flow: USDC or SOL (default: USDC)' },
-      { name: 'payment-tx-signature', description: 'Transaction signature used by --pay-overage legacy flow (required with --pay-overage)' },
+      {
+        name: "conversation-id",
+        description: "Conversation ID",
+        required: true,
+      },
+      { name: "message", description: "Message text", required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
+      {
+        name: "pay-overage",
+        description: "Legacy conversation-write retry helper (default: false)",
+      },
+      {
+        name: "payment-asset",
+        description:
+          "Asset hint for --pay-overage legacy flow: USDC or SOL (default: USDC)",
+      },
+      {
+        name: "payment-tx-signature",
+        description:
+          "Transaction signature used by --pay-overage legacy flow (required with --pay-overage)",
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const conversationId = requireFlag(flags, 'conversation-id');
-      return client.sendMessage(userId, conversationId, {
-        message: requireFlag(flags, 'message'),
-      }, buildOveragePaymentOpts(flags));
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const conversationId = requireFlag(flags, "conversation-id");
+      return client.sendMessage(
+        userId,
+        conversationId,
+        {
+          message: requireFlag(flags, "message"),
+        },
+        buildOveragePaymentOpts(flags),
+      );
     },
   },
 
   {
-    name: 'get-messages',
-    description: 'Get messages from a conversation (poll processing flag)',
+    name: "get-messages",
+    description: "Get messages from a conversation (poll processing flag)",
     flags: [
-      { name: 'conversation-id', description: 'Conversation ID', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
-      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
+      {
+        name: "conversation-id",
+        description: "Conversation ID",
+        required: true,
+      },
+      { name: "user-id", description: "User ID (default: from config)" },
+      { name: "page", description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      {
+        name: "page-size",
+        description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})`,
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const conversationId = requireFlag(flags, 'conversation-id');
-      validatePagingFlags(flags['page'], flags['page-size']);
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const conversationId = requireFlag(flags, "conversation-id");
+      validatePagingFlags(flags["page"], flags["page-size"]);
       return client.getMessages(userId, conversationId, {
-        page: flags['page'],
-        pageSize: flags['page-size'],
+        page: flags["page"],
+        pageSize: flags["page-size"],
       });
     },
   },
@@ -814,53 +969,71 @@ export const COMMANDS: CommandDef[] = [
   // ── Arena ────────────────────────────────────────────────────
 
   {
-    name: 'deploy-arena',
-    description: 'Deploy a strategy to the arena',
+    name: "deploy-arena",
+    description: "Deploy a strategy to the arena",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'strategy-id', description: 'Strategy ID to deploy', required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
+      {
+        name: "strategy-id",
+        description: "Strategy ID to deploy",
+        required: true,
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const strategyId = requireFlag(flags, 'strategy-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const strategyId = requireFlag(flags, "strategy-id");
       return client.deployArenaStrategy(userId, { strategyId });
     },
   },
 
   {
-    name: 'withdraw-arena',
-    description: 'Withdraw from the arena',
+    name: "withdraw-arena",
+    description: "Withdraw from the arena",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'strategy-id', description: 'Strategy ID to withdraw', required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
+      {
+        name: "strategy-id",
+        description: "Strategy ID to withdraw",
+        required: true,
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const strategyId = requireFlag(flags, 'strategy-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const strategyId = requireFlag(flags, "strategy-id");
       return client.withdrawArenaStrategy(userId, { strategyId });
     },
   },
 
   {
-    name: 'arena-leaderboard',
-    description: 'Get the arena leaderboard',
+    name: "arena-leaderboard",
+    description: "Get the arena leaderboard",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'timeframe', description: 'Timeframe: 1d, 30d, 90d (default: 30d)' },
-      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
-      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
-      { name: 'sort-key', description: 'Sort by: pnl, winRate (token-PnL: profitable tokens / tracked tokens * 100, excluding USDC), returnPct, accountValue' },
-      { name: 'sort-direction', description: 'Sort direction: asc, desc' },
+      { name: "user-id", description: "User ID (default: from config)" },
+      {
+        name: "timeframe",
+        description: "Timeframe: 1d, 30d, 90d (default: 30d)",
+      },
+      { name: "page", description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      {
+        name: "page-size",
+        description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})`,
+      },
+      {
+        name: "sort-key",
+        description:
+          "Sort by: pnl, winRate (token-PnL: profitable tokens / tracked tokens * 100, excluding USDC), returnPct, accountValue",
+      },
+      { name: "sort-direction", description: "Sort direction: asc, desc" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      validatePagingFlags(flags['page'], flags['page-size']);
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      validatePagingFlags(flags["page"], flags["page-size"]);
       return client.getArenaLeaderboard(userId, {
-        page: flags['page'],
-        pageSize: flags['page-size'],
-        timeframe: flags['timeframe'],
-        sortKey: flags['sort-key'],
-        sortDirection: flags['sort-direction'],
+        page: flags["page"],
+        pageSize: flags["page-size"],
+        timeframe: flags["timeframe"],
+        sortKey: flags["sort-key"],
+        sortDirection: flags["sort-direction"],
       });
     },
   },
@@ -868,53 +1041,64 @@ export const COMMANDS: CommandDef[] = [
   // ── Quests & Bones ──────────────────────────────────────────────
 
   {
-    name: 'list-quests',
-    description: 'List quests with progress and bones rewards (defaults to unlocked)',
+    name: "list-quests",
+    description:
+      "List quests with progress and bones rewards (defaults to unlocked)",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'unlocked', description: 'Filter for unlocked quests (default: true)' },
-      { name: 'unclaimed', description: 'Filter for unclaimed quests (true/false)' },
-      { name: 'claimed', description: 'Filter for claimed quests (true/false)' },
-      { name: 'mode', description: 'Sort mode: completed_last' },
-      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
-      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
+      { name: "user-id", description: "User ID (default: from config)" },
+      {
+        name: "unlocked",
+        description: "Filter for unlocked quests (default: true)",
+      },
+      {
+        name: "unclaimed",
+        description: "Filter for unclaimed quests (true/false)",
+      },
+      {
+        name: "claimed",
+        description: "Filter for claimed quests (true/false)",
+      },
+      { name: "mode", description: "Sort mode: completed_last" },
+      { name: "page", description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      {
+        name: "page-size",
+        description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})`,
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      validatePagingFlags(flags['page'], flags['page-size']);
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      validatePagingFlags(flags["page"], flags["page-size"]);
       return client.listQuests(userId, {
-        page: flags['page'],
-        pageSize: flags['page-size'],
-        unlocked: flags['unlocked'],
-        unclaimed: flags['unclaimed'],
-        claimed: flags['claimed'],
-        mode: flags['mode'],
+        page: flags["page"],
+        pageSize: flags["page-size"],
+        unlocked: flags["unlocked"],
+        unclaimed: flags["unclaimed"],
+        claimed: flags["claimed"],
+        mode: flags["mode"],
       });
     },
   },
 
   {
-    name: 'claim-quest',
-    description: 'Claim bones (reward points) for a completed quest',
+    name: "claim-quest",
+    description: "Claim bones (reward points) for a completed quest",
     flags: [
-      { name: 'quest-id', description: 'Quest ID to claim', required: true },
-      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: "quest-id", description: "Quest ID to claim", required: true },
+      { name: "user-id", description: "User ID (default: from config)" },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      const questId = requireFlag(flags, 'quest-id');
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      const questId = requireFlag(flags, "quest-id");
       return client.claimQuest(userId, questId);
     },
   },
 
   {
-    name: 'bones-balance',
-    description: 'Get your bones (reward points) balance',
-    flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-    ],
+    name: "bones-balance",
+    description: "Get your bones (reward points) balance",
+    flags: [{ name: "user-id", description: "User ID (default: from config)" }],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
+      const userId = requireFlag(flags, "user-id", config.user_id);
       return client.getBonesBalance(userId);
     },
   },
@@ -922,19 +1106,22 @@ export const COMMANDS: CommandDef[] = [
   // ── Diary Logs ────────────────────────────────────────────────
 
   {
-    name: 'diary-logs',
-    description: 'Get auto-trade diary logs',
+    name: "diary-logs",
+    description: "Get auto-trade diary logs",
     flags: [
-      { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
-      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
+      { name: "user-id", description: "User ID (default: from config)" },
+      { name: "page", description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      {
+        name: "page-size",
+        description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})`,
+      },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      validatePagingFlags(flags['page'], flags['page-size']);
+      const userId = requireFlag(flags, "user-id", config.user_id);
+      validatePagingFlags(flags["page"], flags["page-size"]);
       return client.getDiaryLogs(userId, {
-        page: flags['page'],
-        pageSize: flags['page-size'],
+        page: flags["page"],
+        pageSize: flags["page-size"],
       });
     },
   },
@@ -942,25 +1129,40 @@ export const COMMANDS: CommandDef[] = [
   // ── Config (local utility) ───────────────────────────────────
 
   {
-    name: 'config',
-    description: 'Show or update ~/.milo/config.json',
+    name: "config",
+    description: "Show or update ~/.milo/config.json",
     flags: [
-      { name: 'set-api-key', description: 'Set API key' },
-      { name: 'set-user-id', description: 'Set user ID' },
-      { name: 'set-wallet-id', description: 'Set wallet ID' },
-      { name: 'set-wallet-address', description: 'Set wallet address' },
-      { name: 'set-base-url', description: 'Set base URL' },
+      { name: "set-api-key", description: "Set API key" },
+      { name: "set-user-id", description: "Set user ID" },
+      { name: "set-wallet-id", description: "Set wallet ID" },
+      { name: "set-wallet-address", description: "Set wallet address" },
+      { name: "set-base-url", description: "Set base URL" },
     ],
     handler: async (flags, _client, config) => {
       let changed = false;
-      if (flags['set-api-key']) { config.api_key = flags['set-api-key']; changed = true; }
-      if (flags['set-user-id']) { config.user_id = flags['set-user-id']; changed = true; }
-      if (flags['set-wallet-id']) { config.wallet_id = flags['set-wallet-id']; changed = true; }
-      if (flags['set-wallet-address']) { config.wallet_address = flags['set-wallet-address']; changed = true; }
-      if (flags['set-base-url']) { config.base_url = flags['set-base-url']; changed = true; }
+      if (flags["set-api-key"]) {
+        config.api_key = flags["set-api-key"];
+        changed = true;
+      }
+      if (flags["set-user-id"]) {
+        config.user_id = flags["set-user-id"];
+        changed = true;
+      }
+      if (flags["set-wallet-id"]) {
+        config.wallet_id = flags["set-wallet-id"];
+        changed = true;
+      }
+      if (flags["set-wallet-address"]) {
+        config.wallet_address = flags["set-wallet-address"];
+        changed = true;
+      }
+      if (flags["set-base-url"]) {
+        config.base_url = flags["set-base-url"];
+        changed = true;
+      }
       if (changed) {
         saveConfig(config);
-        return { message: 'Config updated', config };
+        return { message: "Config updated", config };
       }
       return { config };
     },

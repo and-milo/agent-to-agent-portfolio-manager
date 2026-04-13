@@ -2,7 +2,7 @@
 
 ## Overview
 
-Milo's trading engine executes swaps on Solana through [Jupiter](https://jup.ag), the leading DEX aggregator. Every trade — whether placed manually or triggered by Milo's auto-trader — is routed through Jupiter to get the best price across all Solana liquidity sources.
+Milo's trading engine executes swaps on Solana with DFlow for quote routing and swap-instruction generation, then submits signed transactions through Helius Sender for low-latency landing. Every trade — whether placed manually or triggered by Milo's auto-trader — still settles on Solana from the user's wallet.
 
 There is no centralized order book. No custodial exchange. Your tokens stay in your wallet until the moment a swap settles on-chain.
 
@@ -12,7 +12,7 @@ There is no centralized order book. No custodial exchange. Your tokens stay in y
 
 ```
 ┌──────────┐     ┌──────────────┐     ┌──────────┐     ┌──────────┐
-│  Partner  │────►│  Milo Order  │────►│ Jupiter  │────►│  Solana  │
+│  Partner  │────►│  Milo Order  │────►│  DFlow   │────►│  Solana  │
 │   API     │     │   Engine     │     │ Routing  │     │   Chain  │
 └──────────┘     └──────────────┘     └──────────┘     └──────────┘
                         │                                     │
@@ -20,14 +20,20 @@ There is no centralized order book. No custodial exchange. Your tokens stay in y
                   │  Turnkey   │◄─────────────────────────────┘
                   │  Signer    │     transaction confirmation
                   └────────────┘
+                        │
+                        ▼
+                  ┌────────────┐
+                  │  Helius    │
+                  │  Sender    │
+                  └────────────┘
 ```
 
 1. You create an order via the [Partner API](partner-api.md#orders) (or Milo's auto-trader creates one)
 2. The engine monitors trigger conditions (price thresholds)
-3. When the trigger fires, the engine requests a quote from Jupiter
-4. Jupiter finds the best route across all Solana DEXs and AMMs
+3. When the trigger fires, the engine requests a quote from DFlow
+4. DFlow finds the best route across supported Solana venues and returns swap instructions
 5. The transaction is signed via Turnkey (non-custodial — your keys, your wallet)
-6. The signed transaction is submitted to Solana for on-chain settlement
+6. The signed transaction is submitted through Helius Sender for on-chain settlement
 7. Order status updates to `fulfilled` with the transaction signature
 
 ## Fully Decentralized
@@ -36,7 +42,7 @@ Milo never takes custody of your funds.
 
 - **Non-custodial wallets** — Each user gets a Solana wallet powered by [Turnkey](https://turnkey.com). The signing key belongs to you, not Milo. Milo receives delegated permission to execute trades on your behalf.
 - **On-chain settlement** — Every swap is a Solana transaction. You can verify it on any block explorer.
-- **Jupiter routing** — Trades are routed through Jupiter's aggregator, which splits across Raydium, Orca, Meteora, Phoenix, and dozens of other Solana DEXs to find the best price.
+- **DFlow routing + Helius Sender landing** — Trades use DFlow for quote discovery and swap instructions, then use Helius Sender for low-latency transaction submission.
 - **No counterparty risk** — Milo doesn't hold your tokens, doesn't run an order book, and doesn't match trades internally. Every trade settles peer-to-pool on Solana.
 
 ---
@@ -53,7 +59,12 @@ Execute immediately at the best available price. Uses the trigger `{ "operator":
 {
   "type": "buy",
   "amount": { "type": "absolute_usd", "amount": 100 },
-  "trigger": { "type": "absolute", "trigger": "price", "operator": "gte", "value": 0 },
+  "trigger": {
+    "type": "absolute",
+    "trigger": "price",
+    "operator": "gte",
+    "value": 0
+  },
   "execution": {}
 }
 ```
@@ -63,21 +74,33 @@ Execute immediately at the best available price. Uses the trigger `{ "operator":
 Execute when the token reaches a specific price.
 
 **Buy when price drops to $0.50:**
+
 ```json
 {
   "type": "buy",
   "amount": { "type": "absolute_usd", "amount": 100 },
-  "trigger": { "type": "absolute", "trigger": "price", "operator": "lte", "value": 0.50 },
+  "trigger": {
+    "type": "absolute",
+    "trigger": "price",
+    "operator": "lte",
+    "value": 0.5
+  },
   "execution": {}
 }
 ```
 
 **Sell when price rises to $2.00:**
+
 ```json
 {
   "type": "sell",
   "amount": { "type": "relative", "percentage": 100 },
-  "trigger": { "type": "absolute", "trigger": "price", "operator": "gte", "value": 2.00 },
+  "trigger": {
+    "type": "absolute",
+    "trigger": "price",
+    "operator": "gte",
+    "value": 2.0
+  },
   "execution": {}
 }
 ```
@@ -90,7 +113,12 @@ Sell when the price drops by a percentage. Uses a relative trigger with the `dro
 {
   "type": "sell",
   "amount": { "type": "relative", "percentage": 100 },
-  "trigger": { "type": "relative", "trigger": "price", "operator": "drop", "value": 15 },
+  "trigger": {
+    "type": "relative",
+    "trigger": "price",
+    "operator": "drop",
+    "value": 15
+  },
   "execution": {}
 }
 ```
@@ -105,7 +133,12 @@ Sell when the price rises by a percentage. Uses a relative trigger with the `ris
 {
   "type": "sell",
   "amount": { "type": "relative", "percentage": 50 },
-  "trigger": { "type": "relative", "trigger": "price", "operator": "rise", "value": 30 },
+  "trigger": {
+    "type": "relative",
+    "trigger": "price",
+    "operator": "rise",
+    "value": 30
+  },
   "execution": {}
 }
 ```
@@ -123,13 +156,12 @@ Create a buy order with multiple take-profit and stop-loss levels attached. Pass
     { "percentage": 25, "profitPercentage": 50 },
     { "percentage": 50, "profitPercentage": 100 }
   ],
-  "stopLosses": [
-    { "percentage": 100, "lossPercentage": 15 }
-  ]
+  "stopLosses": [{ "percentage": 100, "lossPercentage": 15 }]
 }
 ```
 
 This example:
+
 - Sells 25% at +20% profit
 - Sells 25% at +50% profit
 - Sells 50% at +100% profit
@@ -163,29 +195,29 @@ Every order has a trigger that defines when it executes.
 
 Fire when the token price hits a specific USD value.
 
-| Operator | Meaning | Use case |
-|----------|---------|----------|
-| `gte` | Price >= value | Market order (`value: 0`), sell above target |
-| `lte` | Price <= value | Limit buy at dip |
+| Operator | Meaning        | Use case                                     |
+| -------- | -------------- | -------------------------------------------- |
+| `gte`    | Price >= value | Market order (`value: 0`), sell above target |
+| `lte`    | Price <= value | Limit buy at dip                             |
 
 ### Relative
 
 Fire when the token price moves by a percentage from a reference point.
 
-| Operator | Meaning | Use case |
-|----------|---------|----------|
-| `rise` | Price rose by X% | Take-profit |
-| `drop` | Price dropped by X% (max 100) | Stop-loss |
+| Operator | Meaning                       | Use case    |
+| -------- | ----------------------------- | ----------- |
+| `rise`   | Price rose by X%              | Take-profit |
+| `drop`   | Price dropped by X% (max 100) | Stop-loss   |
 
 ---
 
 ## Amount Types
 
-| Type | Field | Description | Available for |
-|------|-------|-------------|---------------|
-| `absolute` | `amount` | Raw token amount (base units) | Buy, Sell |
-| `absolute_usd` | `amount` | USD equivalent | Buy, Sell |
-| `relative` | `percentage` | % of current position (1-100) | Sell only |
+| Type           | Field        | Description                   | Available for |
+| -------------- | ------------ | ----------------------------- | ------------- |
+| `absolute`     | `amount`     | Raw token amount (base units) | Buy, Sell     |
+| `absolute_usd` | `amount`     | USD equivalent                | Buy, Sell     |
+| `relative`     | `percentage` | % of current position (1-100) | Sell only     |
 
 ---
 
@@ -193,11 +225,11 @@ Fire when the token price moves by a percentage from a reference point.
 
 Fine-tune how your order executes on-chain. All fields are optional — sensible defaults are applied.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `slippagePercentage` | number | 3% | Max allowable slippage (0-100) |
-| `priorityFee` | number | auto | Priority fee in SOL lamports for faster block inclusion |
-| `platformFeeBps` | number | 90-100 bps | Milo platform fee in basis points |
+| Field                | Type   | Default    | Description                                             |
+| -------------------- | ------ | ---------- | ------------------------------------------------------- |
+| `slippagePercentage` | number | 3%         | Max allowable slippage (0-100)                          |
+| `priorityFee`        | number | auto       | Priority fee in SOL lamports for faster block inclusion |
+| `platformFeeBps`     | number | 90-100 bps | Milo platform fee in basis points                       |
 
 Higher slippage tolerance increases fill probability for volatile tokens. Higher priority fees get your transaction included faster by Solana validators.
 
@@ -215,17 +247,18 @@ draft ──► active ──► fulfilling ──► fulfilled
 archived (deleted by user)
 ```
 
-| Status | Description |
-|--------|-------------|
-| `draft` | Created but not monitoring. TP/SL dependants start here. |
-| `active` | Engine is monitoring the trigger condition |
-| `fulfilling` | Trigger fired, swap is executing on-chain |
-| `fulfilled` | Swap confirmed on Solana |
-| `paused` | Temporarily stopped — resume with the activate endpoint |
-| `error` | Execution failed after retries |
-| `archived` | Soft-deleted by user |
+| Status       | Description                                              |
+| ------------ | -------------------------------------------------------- |
+| `draft`      | Created but not monitoring. TP/SL dependants start here. |
+| `active`     | Engine is monitoring the trigger condition               |
+| `fulfilling` | Trigger fired, swap is executing on-chain                |
+| `fulfilled`  | Swap confirmed on Solana                                 |
+| `paused`     | Temporarily stopped — resume with the activate endpoint  |
+| `error`      | Execution failed after retries                           |
+| `archived`   | Soft-deleted by user                                     |
 
 You can manage order state through the Partner API:
+
 - **Pause** — `POST /api/v1/users/{userId}/orders/{orderId}/pause`
 - **Resume** — `POST /api/v1/users/{userId}/orders/{orderId}/activate`
 - **Delete** — `DELETE /api/v1/users/{userId}/orders/{orderId}`
@@ -240,14 +273,14 @@ See [Partner API — Orders](partner-api.md#orders) for full details.
 
 When an order fails, the `executionSummary` field contains the reason. Common errors:
 
-| Error | Meaning |
-|-------|---------|
-| `no_route_found` | Jupiter couldn't find a swap path — token may have no liquidity |
-| `not_enough_token_balance` | Insufficient tokens in wallet to fill the sell |
-| `not_enough_sol` | Not enough SOL to cover transaction fees |
-| `slippage_too_low` | Price moved beyond your slippage tolerance during execution |
-| `swap_not_supported` | Token pair cannot be swapped |
-| `network_error` | Solana RPC or network issue |
+| Error                      | Meaning                                                       |
+| -------------------------- | ------------------------------------------------------------- |
+| `no_route_found`           | DFlow couldn't find a swap path — token may have no liquidity |
+| `not_enough_token_balance` | Insufficient tokens in wallet to fill the sell                |
+| `not_enough_sol`           | Not enough SOL to cover transaction fees                      |
+| `slippage_too_low`         | Price moved beyond your slippage tolerance during execution   |
+| `swap_not_supported`       | Token pair cannot be swapped                                  |
+| `network_error`            | Solana RPC or network issue                                   |
 
 Failed orders are retried with exponential backoff (up to 5 attempts). If all retries fail, the order moves to `error` status.
 
@@ -255,16 +288,16 @@ Failed orders are retried with exponential backoff (up to 5 attempts). If all re
 
 ## Roadmap
 
-| Feature | Status |
-|---------|--------|
-| Market orders | Live |
-| Limit orders (absolute price triggers) | Live |
-| Stop-loss (relative % drop) | Live |
-| Take-profit (relative % rise) | Live |
-| TP/SL ladders (multi-level dependants) | Live |
-| Order pause / resume / delete | Live |
-| Position close / close-all | Live |
-| Trailing stop | Coming soon |
-| DCA (dollar-cost averaging) | Coming soon |
-| TWAP (time-weighted average price) | Coming soon |
-| Conditional chains (if X then Y) | Planned |
+| Feature                                | Status      |
+| -------------------------------------- | ----------- |
+| Market orders                          | Live        |
+| Limit orders (absolute price triggers) | Live        |
+| Stop-loss (relative % drop)            | Live        |
+| Take-profit (relative % rise)          | Live        |
+| TP/SL ladders (multi-level dependants) | Live        |
+| Order pause / resume / delete          | Live        |
+| Position close / close-all             | Live        |
+| Trailing stop                          | Coming soon |
+| DCA (dollar-cost averaging)            | Coming soon |
+| TWAP (time-weighted average price)     | Coming soon |
+| Conditional chains (if X then Y)       | Planned     |
