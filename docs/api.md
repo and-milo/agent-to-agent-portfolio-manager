@@ -408,6 +408,8 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/arena/leaderboard?timef
 | `timeframe` | string | `1d`, `30d`, `90d` | — |
 | `page` | number | Page number | 1 |
 | `pageSize` | number | Items per page (max: 100) | 25 |
+
+Boolean params accept `true`/`1`/`yes`/`on` and `false`/`0`/`no`/`off` (case-insensitive; a bare flag reads as `false`). Any other value fails validation with `400`. `unlocked=false` disables the default unlocked-only filter.
 | `sortKey` | string | `pnl`, `winRate`, `returnPct`, `accountValue` | — |
 | `sortDirection` | string | `asc`, `desc` | — |
 
@@ -453,7 +455,7 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/quests" \
 
 | Param | Type | Description | Default |
 |-------|------|-------------|---------|
-| `unlocked` | boolean | Filter for unlocked quests (available) | `true` |
+| `unlocked` | boolean | Filter for unlocked quests (available); `false` disables the default filter | `true` |
 | `unclaimed` | boolean | Filter for completed but unclaimed quests | — |
 | `claimed` | boolean | Filter for claimed quests | — |
 | `mode` | string | `completed_last` | — |

@@ -872,9 +872,11 @@ export const COMMANDS: CommandDef[] = [
     description: 'List quests with progress and bones rewards (defaults to unlocked)',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
-      { name: 'unlocked', description: 'Filter for unlocked quests (default: true)' },
-      { name: 'unclaimed', description: 'Filter for unclaimed quests (true/false)' },
-      { name: 'claimed', description: 'Filter for claimed quests (true/false)' },
+      // Boolean flags accept true/1/yes/on or false/0/no/off (case-insensitive);
+      // other values fail API validation with 400.
+      { name: 'unlocked', description: 'Filter for unlocked quests (default: true; false disables the default filter)' },
+      { name: 'unclaimed', description: 'Filter for unclaimed quests (true/1/yes/on | false/0/no/off)' },
+      { name: 'claimed', description: 'Filter for claimed quests (true/1/yes/on | false/0/no/off)' },
       { name: 'mode', description: 'Sort mode: completed_last' },
       { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
       { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
