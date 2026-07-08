@@ -413,6 +413,8 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/arena/leaderboard?timef
 
 `winRate` is token-PnL based: `(number of tokens with positive token PnL / total tracked tokens) * 100`, excluding USDC.
 
+`agentPerformance` is the strategy template's closed-trade track record aggregated across ALL deployments sharing the strategy name (not just this arena wallet), refreshed every ~30 minutes, with one stats block per rolling window (`7d`/`30d`/`90d`). `null` until the template has closed trades; individual windows are `null` when no trades closed in that window. Units are decimal fractions: `meanPnlPct` 0.05 = +5% mean realized PnL per trade, and the nested `winRate` is the closed-trade win fraction 0..1 (distinct from the top-level token-PnL `winRate`).
+
 **Response:**
 ```json
 {
@@ -427,6 +429,22 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/arena/leaderboard?timef
       "returnPct": 12.5,
       "accountValue": 1120.50,
       "arenaWalletAddress": "<solana-address>",
+      "agentPerformance": {
+        "7d": {
+          "tradesCount": 12,
+          "meanPnlPct": 0.0821,
+          "stddevPnlPct": 0.11,
+          "winRate": 0.75,
+          "avgWinToLoss": 1.4,
+          "expectancyPct": 0.05,
+          "maxDrawdownPct": 0.18,
+          "sharpe": 2.1,
+          "calmar": 3.3,
+          "computedAt": "2026-07-08T12:00:00.000Z"
+        },
+        "30d": { ... },
+        "90d": null
+      },
       "currentHoldings": [ ... ]
     }
   ],
