@@ -971,7 +971,7 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/positions?status=active
 | `pageSize` | Items per page (default: 25, max: 100) |
 
 Each position includes invested amount, realized/unrealized PnL, current value, `totalPnlUsd`, `pnlPercentage`, `walletId`, `tradingAccountId`, and `tradingAccountType`.
-Wallet-backed positions include wallet order data and use `tradingAccountType: "milo_wallet"`. Stock brokerage positions use `walletId: null`, `tradingAccountType: "stock_brokerage"`, and derive linked order/current-value data from brokerage order and position records.
+Wallet-backed positions include wallet order data and use `tradingAccountType: "milo_wallet"`. Stock brokerage positions use `walletId: null`, `tradingAccountType: "stock_brokerage"`, and derive linked order/current-value data from brokerage order and position records. KuCoin (CEX) positions likewise use `walletId: null` with `tradingAccountType: "cex_brokerage"`.
 Thesis PnL is server-calculated as `soldUsd + actualCurrentValueUsd - investedUsd`; `pnlPercentage` is divided by `investedUsd`.
 
 #### Close Position
