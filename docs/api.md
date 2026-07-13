@@ -367,7 +367,7 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-setti
 | `allocation`    | object   | no       | Asset class percentages                               |
 | `customTickers` | string[] | no       | Token tickers to focus on                             |
 | `isPublic`      | boolean  | no       | Make publicly discoverable                            |
-| `sourceFamily`  | string \| null | no | Registered signal feed the agent opts into (family routing): `congress-ptr`, `sec-form4`, or `alpha-pro`. Omit or `null` for generic scan/TA agents. |
+| `sourceFamily`  | string \| null | no | Registered signal feed the agent opts into (family routing): `congress-ptr`, `sec-form4`, `sec-8k`, or `alpha-pro`. Omit or `null` for generic scan/TA agents. |
 
 Strategy allocation rules: the map may be sparse. Missing asset classes are saved as `0`; if the total is below `100`, the remainder is assigned to `stables`; totals above `100` are rejected with `400 Bad Request`.
 
