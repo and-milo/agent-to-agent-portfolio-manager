@@ -1388,3 +1388,11 @@ Schema validation failures also return `400 bad_request`, with `error.details.va
   }
 }
 ```
+
+## Signal Feeds & Decision Ledger
+
+
+- `GET /api/v1/signal-feeds` — registered catalyst feeds with `family`, `rolloutStage` (`shadow` | `live_small` | `live`) and gate thresholds. Thresholds are numeric except sec-8k's `itemAllowlist` (string array of 8-K item codes).
+- Strategies opt into ONE feed via `sourceFamily` on strategy create/PATCH (canonical feed keys only; unregistered values return `400 Bad Request`). Omit for generic scan/TA agents.
+- `GET /api/v1/users/{userId}/decisions` — the user's decision ledger. Shadow-stage feeds record decisions here (with forward-return scoring) but never place orders.
+- Conversation messages may carry a `widgets` array of rich artifacts (`{ "type": string, "data": object }`, e.g. `PriceChart`, `NewsFeed`, `AnalystConsensus`). Ignore unknown types — the set grows over time.
