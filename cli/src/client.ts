@@ -295,6 +295,24 @@ export class PartnerApiClient {
     return this.request('POST', `/api/v1/users/${userId}/positions/close-all`);
   }
 
+  // ── Signal feeds & decisions ────────────────────────────────────
+
+  listSignalFeeds() {
+    return this.request('GET', '/api/v1/signal-feeds');
+  }
+
+  listDecisions(
+    userId: string,
+    opts?: { page?: string; pageSize?: string; action?: string; tradingAccountId?: string },
+  ) {
+    return this.request('GET', `/api/v1/users/${userId}/decisions`, undefined, {
+      page: opts?.page,
+      pageSize: opts?.pageSize,
+      action: opts?.action,
+      tradingAccountId: opts?.tradingAccountId,
+    });
+  }
+
   // ── Orders ──────────────────────────────────────────────────────
 
   createOrder(walletId: string, body: Record<string, unknown>) {

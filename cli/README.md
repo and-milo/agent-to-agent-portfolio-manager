@@ -61,6 +61,8 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `transactions` | List wallet transactions |
 | `executed-transactions` | Get executed (order-linked) transactions |
 | `list-positions` | List investment positions with PnL |
+| `signal-feeds` | List registered catalyst signal feeds (rollout stage + gates) |
+| `decisions` | Decision ledger incl. shadow/gated decisions that never traded |
 | `close-position` | Close a position |
 | `close-all-positions` | Close all positions |
 | `create-order` | Create a buy/sell order with optional TP/SL |

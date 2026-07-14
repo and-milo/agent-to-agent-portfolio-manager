@@ -965,4 +965,40 @@ export const COMMANDS: CommandDef[] = [
       return { config };
     },
   },
+
+  // ── Signal feeds & decisions ─────────────────────────────────
+
+  {
+    name: 'signal-feeds',
+    description:
+      'List registered catalyst signal feeds (family, rolloutStage: shadow | live_small | live, gate thresholds)',
+    flags: [],
+    handler: async (_flags, client) => {
+      return client.listSignalFeeds();
+    },
+  },
+
+  {
+    name: 'decisions',
+    description:
+      'Decision ledger — structured decision snapshots (confidence, gates, forward returns); orderPlaced=false marks shadow/gated decisions that never traded',
+    flags: [
+      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: 'action', description: 'Filter: trade or skip' },
+      { name: 'trading-account-id', description: 'Scope to one trading account' },
+      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
+    ],
+    handler: async (flags, client, config) => {
+      const userId = requireFlag(flags, 'user-id', config.user_id);
+      validatePagingFlags(flags['page'], flags['page-size']);
+      return client.listDecisions(userId, {
+        action: flags['action'],
+        tradingAccountId: flags['trading-account-id'],
+        page: flags['page'],
+        pageSize: flags['page-size'],
+      });
+    },
+  },
+
 ];
