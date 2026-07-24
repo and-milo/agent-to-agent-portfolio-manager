@@ -662,6 +662,9 @@ curl -X POST https://partners.andmilo.com/api/v1/wallets/{walletId}/actions/send
 
 For native SOL use mint: `So11111111111111111111111111111111111111112`
 If a JSON body includes `walletId`, it must match the `{walletId}` path parameter.
+**Funding wallet:** the transfer is balance-checked against, and funded from, the
+`{walletId}` in the path. If you hold several Milo wallets, each send draws only on
+the wallet you name — no other wallet of yours is debited.
 
 **Response (202):**
 ```json

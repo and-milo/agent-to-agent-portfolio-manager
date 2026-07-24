@@ -167,8 +167,10 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 ./dist/milo create-conversation --message "Analyze SOL price action" --agent-type market-analyst
 ./dist/milo get-messages --conversation-id <uuid>
 
-# Send tokens
+# Send tokens — funded from --wallet-id (defaults to config.wallet_id).
+# The named wallet is authoritative: no other wallet of yours is debited.
 ./dist/milo send-tokens \
+  --wallet-id <uuid> \
   --recipient 9abc...def \
   --token So11111111111111111111111111111111 \
   --amount 1.5
