@@ -943,7 +943,7 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/conversations/{conversa
 }
 ```
 
-**Widgets (rich artifacts):** an assistant message may include a `widgets` array — the rich artifacts a tool produced during the run (charts, tables, reports). Each is `{ "type": string, "data": object }`, where `type` is the renderer selector and `data` is the payload. The field is present only on messages that generated artifacts; text-only messages omit it. Known `type` values include `PriceChart`, `PerformanceCompare`, `AnalystConsensus`, `EarningsDigest`, `EarningsTimeline`, `InsiderActivity`, `NewsFeed`, `PeerComparison`, `QuarterlySeries`, `SmartMoney`, and `Analysis`; each has a payload contract in `docs/artifacts/*.md`. Treat `data` as an open bag of market/analysis data (no tenant-scoped fields).
+**Widgets (rich artifacts):** an assistant message may include a `widgets` array — the rich artifacts a tool produced during the run (charts, tables, reports). Each is `{ "type": string, "data": object }`, where `type` is the renderer selector and `data` is the payload. The field is present only on messages that generated artifacts; text-only messages omit it. Known `type` values include `PriceChart`, `PerformanceCompare`, `AnalystConsensus`, `EarningsDigest`, `EarningsTimeline`, `InsiderActivity`, `NewsFeed`, `PeerComparison`, `QuarterlySeries`, `SmartMoney`, `Analysis`, and `TokenList` (ranked token screens — trending/search results ride in `data.tokens[]` instead of a text table; read the widget or the ranked stats are lost); each has a payload contract in `docs/artifacts/*.md`. Treat `data` as an open bag of market/analysis data (no tenant-scoped fields).
 
 **Polling pattern:**
 
