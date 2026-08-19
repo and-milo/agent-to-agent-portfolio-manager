@@ -978,7 +978,7 @@ Thesis PnL is server-calculated as `soldUsd + actualCurrentValueUsd - investedUs
 
 `POST /api/v1/users/{userId}/positions/{thesisId}/close`
 
-Wallet-backed positions cancel pending orders and create a sell order for remaining holdings. Stock brokerage thesis close returns `closeOrderAction: "unsupported"` for now.
+Wallet-backed positions cancel pending orders and create a sell order for remaining holdings. Stock brokerage thesis close returns `closeOrderAction: "unsupported"` for now. `closeOrderAction` can also be `"blocked_loss_breaker"`: the automated trader refuses its own closes that would realize a loss past the capitulation breaker (both a USD and a percent-of-cost threshold), leaving the stop-loss ladder armed and returning a `lossBreaker` object with the measured loss; closes requested through this endpoint are user-initiated and are never blocked by it.
 
 #### Close All Positions
 

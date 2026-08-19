@@ -116,7 +116,7 @@ That's it — Milo is now managing your portfolio. Read on for the full feature 
 - **Auto-trading** — Configure risk tolerance, strategy, and asset allocation. Milo's auto-trader agent monitors markets and executes trades autonomously.
 - **Orders** — Create limit, market, stop-loss, and take-profit orders on any Solana token.
 - **Token transfers** — Send any SPL token or SOL from your Milo wallet to any Solana address.
-- **Positions** — Track open positions with PnL data, close positions.
+- **Positions** — Track open positions with PnL data, close positions. Closes you request are user-initiated and always execute; `closeOrderAction: "blocked_loss_breaker"` only appears on the automated trader's own closes (its capitulation safety breaker).
 - **Arena** — Deploy public strategies to a competitive leaderboard. Milo funds an arena wallet and trades autonomously using the strategy. Withdraw to reclaim holdings.
 - **Quests & Bones** — Complete quests (event-driven tasks like trades, signups) to earn bones (reward points). Check quests regularly and claim bones for completed quests.
 - **AI conversations** — Chat with Milo's market analyst, auto-trader, or game agent. Async processing with polling.
