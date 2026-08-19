@@ -74,6 +74,7 @@ test('rejects non-integer paging values', () => {
 test('accepts canonical partner model ids', () => {
   assert.equal(parseModelVersionFlag('gpt-5.2-high'), 'gpt-5.2-high');
   assert.equal(parseModelVersionFlag('gpt-5.4'), 'gpt-5.4');
+  assert.equal(parseModelVersionFlag('gpt-5.6-terra'), 'gpt-5.6-terra');
 });
 
 test('accepts null model version sentinel', () => {
