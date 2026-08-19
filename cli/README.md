@@ -184,7 +184,7 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 
 # Quests & Bones — fetch open quests (unlocked by default), claim bones, view balance
 ./dist/milo list-quests
-./dist/milo list-quests --unclaimed true
+./dist/milo list-quests --unclaimed true   # booleans: true/1/yes/on or false/0/no/off (other values 400)
 ./dist/milo claim-quest --quest-id <uuid>
 ./dist/milo bones-balance
 ```
