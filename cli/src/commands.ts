@@ -46,6 +46,8 @@ const MAX_PAGE_SIZE_VALUE = 100;
 const MAX_TAKE_PROFITS = 5;
 const MAX_STOP_LOSSES = 5;
 const MAX_TOTAL_DEPENDANTS = 8;
+// Public model ids are provider-neutral. Azure deployment names remain
+// server-side runtime configuration and must never be added to this list.
 export const PARTNER_CANONICAL_MODEL_VERSIONS = [
   'o3',
   'gemini-3-pro',
@@ -53,6 +55,7 @@ export const PARTNER_CANONICAL_MODEL_VERSIONS = [
   'gpt-5.2-high',
   'gpt-5.2-xh',
   'gpt-5.4',
+  'gpt-5.6-terra',
   'grok-4.1-fast-reasoning',
   'grok-4',
   'claude-opus-4.5',

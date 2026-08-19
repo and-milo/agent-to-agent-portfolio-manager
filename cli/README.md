@@ -108,7 +108,8 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
   - Unsupported or unavailable model selection returns `400 Bad Request`.
   - If the model is outside the account tier, the error includes `error.details.requiredPlan`, `error.details.upgradeUrl`, and the same plan-specific Stripe link in the error message.
   - Use `--model-version null` to clear preferred model.
-  - OpenAI canonical model ids are `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
+  - OpenAI canonical model ids are `gpt-5.6-terra` (the default), `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
+  - OpenAI ids are provider-neutral. Pass canonical ids to the CLI; Azure deployment names are server-managed and are rejected as model ids.
   - Anthropic canonical model ids are `claude-opus-4.5` and `claude-opus-4.6`.
   - Gemini canonical model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
   - Grok canonical model ids are `grok-4.1-fast-reasoning` and `grok-4`.

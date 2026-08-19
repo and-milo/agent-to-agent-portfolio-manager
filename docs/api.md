@@ -231,7 +231,8 @@ Data-source resolution notes:
 
 Model entitlement notes:
 - Only canonical model ids are accepted on the partner surface.
-- Canonical OpenAI model ids are `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
+- Canonical OpenAI model ids are `gpt-5.6-terra` (the default), `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
+- These ids are provider-neutral at the API boundary. Never send an Azure deployment name; deployment routing is server-managed.
 - Canonical Anthropic model ids are `claude-opus-4.5` and `claude-opus-4.6`.
 - Canonical Gemini model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
 - Canonical Grok model ids are `grok-4.1-fast-reasoning` and `grok-4`.
