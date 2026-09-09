@@ -881,6 +881,8 @@ curl "https://partners.andmilo.com/api/v1/wallets/{walletId}/transactions?limit=
 
 Only transactions linked to orders (trades). Uses cursor-based pagination.
 
+Transaction signatures are opaque identifiers and may refer to legacy, v0, or v1 Solana transactions. The response shape is unchanged; clients should store and pass the signature without attempting to infer its wire version.
+
 ```bash
 curl "https://partners.andmilo.com/api/v1/wallets/{walletId}/executed-transactions?limit=25&txType=buy" \
   -H "X-API-Key: $API_KEY"
