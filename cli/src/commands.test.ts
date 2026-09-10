@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  COMMANDS,
   parseModelVersionFlag,
+  parseResearchTicker,
   validateCreateOrderDependants,
+  validateMinValueUsdFlag,
   validatePagingFlags,
+  validateResearchWindowFlags,
 } from './commands.js';
 
 function makeArray(size: number) {
@@ -85,4 +89,101 @@ test('rejects internal model aliases', () => {
     () => parseModelVersionFlag('milo-pro'),
     /--model-version must be one of:/,
   );
+});
+
+// ── Research flag validation (mirrors the partner API zod schemas) ──
+
+test('research ticker is trimmed, upper-cased and pattern-checked', () => {
+  assert.equal(parseResearchTicker(' nvda ', true), 'NVDA');
+  assert.equal(parseResearchTicker('brk.b', true), 'BRK.B');
+  assert.equal(parseResearchTicker('BF-B', true), 'BF-B');
+  for (const bad of ['', 'TOOLONGTICKER', '123', 'NV DA', 'nv$']) {
+    assert.throws(() => parseResearchTicker(bad, true), /--ticker/, bad);
+  }
+});
+
+test('research ticker is optional for market-wide congress trades', () => {
+  assert.equal(parseResearchTicker(undefined, false), undefined);
+  assert.throws(() => parseResearchTicker(undefined, true), /Missing required flag --ticker/);
+  assert.throws(() => parseResearchTicker('BAD TICKER', false), /--ticker must be/);
+});
+
+test('research window flags enforce days <= 365 and limit <= 100 (news: 12)', () => {
+  assert.doesNotThrow(() => validateResearchWindowFlags('365', '100'));
+  assert.doesNotThrow(() => validateResearchWindowFlags(undefined, undefined));
+  assert.throws(() => validateResearchWindowFlags('366', '10'), /--days cannot exceed 365/);
+  assert.throws(() => validateResearchWindowFlags('0', '10'), /--days must be a positive integer/);
+  assert.throws(() => validateResearchWindowFlags('30', '101'), /--limit cannot exceed 100/);
+  assert.throws(() => validateResearchWindowFlags(undefined, '13', 12), /--limit cannot exceed 12/);
+  assert.doesNotThrow(() => validateResearchWindowFlags(undefined, '12', 12));
+});
+
+test('min-value-usd must be a non-negative number', () => {
+  assert.doesNotThrow(() => validateMinValueUsdFlag(undefined));
+  assert.doesNotThrow(() => validateMinValueUsdFlag('0'));
+  assert.doesNotThrow(() => validateMinValueUsdFlag('100000'));
+  assert.throws(() => validateMinValueUsdFlag('-1'), /--min-value-usd/);
+  assert.throws(() => validateMinValueUsdFlag('abc'), /--min-value-usd/);
+});
+
+test('research commands are registered with the documented flags', () => {
+  const byName = new Map(COMMANDS.map((c) => [c.name, c]));
+  for (const name of [
+    'research-digest',
+    'insider-transactions',
+    'insider-buys',
+    'congress-trades',
+    '8k-events',
+    'analyst-consensus',
+    'fundamentals',
+    'earnings-timeline',
+    'stock-news',
+    'peers',
+  ]) {
+    assert.ok(byName.has(name), `missing command ${name}`);
+  }
+  assert.ok(byName.get('research-digest')!.flags.find((f) => f.name === 'ticker')?.required);
+  assert.equal(byName.get('congress-trades')!.flags.find((f) => f.name === 'ticker')?.required, undefined);
+  assert.ok(byName.get('insider-buys')!.flags.some((f) => f.name === 'min-value-usd'));
+  for (const licensed of ['analyst-consensus', 'fundamentals', 'earnings-timeline', 'stock-news', 'peers']) {
+    assert.match(byName.get(licensed)!.description, /optional, licensed/);
+  }
+});
+
+test('research command handlers forward validated flags to the client', async () => {
+  const calls: Array<[string, unknown]> = [];
+  const client = new Proxy(
+    {},
+    {
+      get:
+        (_t, method: string) =>
+        (...args: unknown[]) => {
+          calls.push([method, args]);
+          return Promise.resolve({ data: [] });
+        },
+    },
+  ) as any;
+  const config = {} as any;
+  const run = (name: string, flags: Record<string, string | undefined>) =>
+    COMMANDS.find((c) => c.name === name)!.handler(flags, client, config);
+
+  await run('research-digest', { ticker: 'nvda' });
+  await run('insider-transactions', { ticker: 'NVDA', days: '30', limit: '5' });
+  await run('insider-buys', { days: '14', 'min-value-usd': '100000', limit: '10' });
+  await run('congress-trades', {});
+  await run('8k-events', { ticker: 'nvda' });
+  await run('stock-news', { ticker: 'nvda', limit: '12' });
+
+  assert.deepEqual(calls, [
+    ['getStockResearchDigest', ['NVDA']],
+    ['getInsiderTransactions', [{ ticker: 'NVDA', days: '30', limit: '5' }]],
+    ['getRecentInsiderBuys', [{ days: '14', minValueUsd: '100000', limit: '10' }]],
+    ['getCongressTrades', [{ ticker: undefined, days: undefined, limit: undefined }]],
+    ['get8kEvents', [{ ticker: 'NVDA', days: undefined, limit: undefined }]],
+    ['getStockNews', [{ ticker: 'NVDA', limit: '12' }]],
+  ]);
+
+  await assert.rejects(run('research-digest', {}), /Missing required flag --ticker/);
+  await assert.rejects(run('insider-transactions', { ticker: 'NVDA', limit: '101' }), /--limit cannot exceed 100/);
+  await assert.rejects(run('stock-news', { ticker: 'NVDA', limit: '13' }), /--limit cannot exceed 12/);
 });

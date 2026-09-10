@@ -164,7 +164,7 @@ The partner API server exposes MCP on the same host at `/mcp` using Streamable H
 - `GET /mcp` for SSE stream
 - `DELETE /mcp` for session termination
 
-`POST /mcp` initialize accepts optional `X-API-Key`, or an OAuth 2.1 bearer token (`Authorization: Bearer mat_…`, sent on every request). Without either, the MCP session starts unauthenticated: signup/public tools and `tools/list` work, and the first `tools/call` returns `401` with `WWW-Authenticate: Bearer … resource_metadata="{{BASE_URL}}/.well-known/oauth-protected-resource/mcp", scope="profile portfolio:read chat strategies:write offline_access"` — OAuth-capable clients (Claude, ChatGPT, MCP Inspector) then run discovery (`/.well-known/oauth-authorization-server`), register (RFC 7591 or a Client ID Metadata Document URL), send the user to the consent page (`/oauth/consent`, Solana wallet sign-in) and resume on the same session. OAuth sessions only see tools covered by the granted scopes (never `trade`/`transfer` for directory clients) and `userId` arguments default to the signed-in user; API-key sessions are unchanged. Request throttling and session-capacity protections are enforced, so initialize may return `429`. On `429`, respect `Retry-After` and retry after the indicated delay. Sessions can also expire, so re-initialize after invalid-session errors.
+`POST /mcp` initialize accepts optional `X-API-Key`, or an OAuth 2.1 bearer token (`Authorization: Bearer mat_…`, sent on every request). Without either, the MCP session starts unauthenticated: signup/public tools and `tools/list` work, and the first `tools/call` returns `401` with `WWW-Authenticate: Bearer … resource_metadata="{{BASE_URL}}/.well-known/oauth-protected-resource/mcp", scope="profile portfolio:read chat strategies:write offline_access"` — OAuth-capable clients (Claude, ChatGPT, MCP Inspector) then run discovery (`/.well-known/oauth-authorization-server`), register (RFC 7591 or a Client ID Metadata Document URL), send the user to the consent page (`/oauth/consent`, Solana wallet sign-in) and resume on the same session. OAuth sessions only see tools covered by the granted scopes (never `trade`/`transfer` for directory clients; `sync_strategy` is a `trade` tool because it re-applies a strategy onto the live account, and conversation agents only get order/swap/position tools with `trade`, send-tokens with `transfer`, strategy create/edit with `strategies:write`) and `userId` arguments default to the signed-in user; API-key sessions are unchanged. After an anonymous session runs `signup`, it is bound to the returned key in place and the next protected call works without re-initializing. Request throttling and session-capacity protections are enforced, so initialize may return `429`. On `429`, respect `Retry-After` and retry after the indicated delay. Sessions can also expire, so re-initialize after invalid-session errors.
 
 For sessioned requests after initialize, send `Mcp-Session-Id`.
 
@@ -621,7 +621,7 @@ Strategies are reusable autotrade configurations that live under auto-trade sett
 2. **Link** it via `PATCH /auto-trade-settings` with `{ "strategyId": "<uuid>" }`. This takes a **snapshot** of the strategy into your settings.
 3. **Use** — Milo auto-trades according to the snapshot.
 4. If the strategy is updated later, the GET settings response includes `strategySync.synced: false`.
-5. **Sync** — call `POST .../strategies/{strategyId}/sync` to re-apply the latest version.
+5. **Sync** — call `POST .../strategies/{strategyId}/sync` to re-apply the latest version. With an OAuth token this needs the `trade` scope (it changes the live account's settings); create/update need `strategies:write`.
 
 #### POST /api/v1/users/{userId}/auto-trade-settings/strategies
 Create a new strategy.
@@ -1356,6 +1356,8 @@ Response includes `meta`:
 | 409 | `error` | Conflict (e.g., user already exists) |
 | 429 | `rate_limit_exceeded` | Rate limit exceeded |
 | 500 | `internal_error` | Unexpected server error |
+| 503 | `service_unavailable` | Research data source unavailable / not configured (retryable) |
+| 503 | `provider_unavailable` | Licensed research: upstream provider failed — retry shortly; distinct from `404` no-data |
 
 **Error response format:**
 ```json
@@ -1404,8 +1406,9 @@ Read-only, market-level reads under `GET /api/v1/research/*` — an API key but 
 - `GET /api/v1/research/insider-buys?days=30&minValueUsd=100000&limit=50` — notable insider purchases across the tracked universe.
 - `GET /api/v1/research/congress-trades?ticker=NVDA&days=90&limit=50` — congressional PTR disclosures (`chamber`, `memberName`, `type`, `amountBucket`, `amountMinUsd`, `transactionDate`, `disclosureDate`, `link`); omit `ticker` for market-wide. PTRs carry amount ranges (never exact amounts) and lag the trade by up to 30-45 days; polled every 1-4h.
 - `GET /api/v1/research/8k-events?ticker=NVDA&days=90&limit=50` — SEC 8-K filings with `items` (codes) and `itemSummaries` (titles), `link`/`finalLink`; polled ~every 30 min.
-- Licensed (FMP-derived) routes — `analyst-consensus`, `fundamentals`, `earnings-timeline`, `news` (`limit` max 12), `peers` — are mounted only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off → `404`); `503 service_unavailable` when `FMP_API_KEY` is missing; `404` when the provider has no data.
-- Any research data-layer failure returns `503 service_unavailable` with a generic message.
+- Licensed (FMP-derived) routes — `analyst-consensus`, `fundamentals`, `earnings-timeline`, `news` (`limit` max 12), `peers` — are mounted only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off → `404`); `503 service_unavailable` when `FMP_API_KEY` is missing; `503 provider_unavailable` when the upstream provider failed (timeout / HTTP error — transient, retry shortly); `404 not_found` only when the provider answered and has no data for the ticker. A `404` never hides an outage.
+- Any research data-layer failure returns `503 service_unavailable` with a generic message. Treat every `503` on a research route as retryable and every `404` as "no data".
+- Digest statistics (`insider.count`/`totalValueUsd`, `congress.count`/`purchases`/`sales`, `sec8k.count`) are whole-window aggregates and `notable` rows are the top 5 by disclosed value across the whole 90-day window — never derived from a capped page.
 
 ```bash
 curl "{{BASE_URL}}/api/v1/research/digest?ticker=NVDA" \

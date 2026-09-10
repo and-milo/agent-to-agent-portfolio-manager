@@ -313,6 +313,70 @@ export class PartnerApiClient {
     });
   }
 
+  // ── Research (market-level reads; API key only, no userId) ──────
+
+  getInsiderTransactions(opts: { ticker: string; days?: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/insider-transactions', undefined, {
+      ticker: opts.ticker,
+      days: opts.days,
+      limit: opts.limit,
+    });
+  }
+
+  getRecentInsiderBuys(opts?: { days?: string; minValueUsd?: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/insider-buys', undefined, {
+      days: opts?.days,
+      minValueUsd: opts?.minValueUsd,
+      limit: opts?.limit,
+    });
+  }
+
+  getCongressTrades(opts?: { ticker?: string; days?: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/congress-trades', undefined, {
+      ticker: opts?.ticker,
+      days: opts?.days,
+      limit: opts?.limit,
+    });
+  }
+
+  get8kEvents(opts: { ticker: string; days?: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/8k-events', undefined, {
+      ticker: opts.ticker,
+      days: opts.days,
+      limit: opts.limit,
+    });
+  }
+
+  getStockResearchDigest(ticker: string) {
+    return this.request('GET', '/api/v1/research/digest', undefined, { ticker });
+  }
+
+  // Licensed (FMP-derived) research — the server only mounts these routes
+  // when MCP_LICENSED_RESEARCH_TOOLS=true (404 otherwise).
+
+  getAnalystConsensus(ticker: string) {
+    return this.request('GET', '/api/v1/research/analyst-consensus', undefined, { ticker });
+  }
+
+  getStockFundamentals(ticker: string) {
+    return this.request('GET', '/api/v1/research/fundamentals', undefined, { ticker });
+  }
+
+  getEarningsTimeline(ticker: string) {
+    return this.request('GET', '/api/v1/research/earnings-timeline', undefined, { ticker });
+  }
+
+  getStockNews(opts: { ticker: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/news', undefined, {
+      ticker: opts.ticker,
+      limit: opts.limit,
+    });
+  }
+
+  getPeerComparison(ticker: string) {
+    return this.request('GET', '/api/v1/research/peers', undefined, { ticker });
+  }
+
   // ── Orders ──────────────────────────────────────────────────────
 
   createOrder(walletId: string, body: Record<string, unknown>) {

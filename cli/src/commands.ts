@@ -110,6 +110,45 @@ export function validatePagingFlags(page: string | undefined, pageSize: string |
   validateOptionalPositiveInt('page-size', pageSize, MAX_PAGE_SIZE_VALUE);
 }
 
+// Research (GET /api/v1/research/*) — mirrors the partner API's zod schemas:
+// ticker 1-6 chars (letters/digits, `.`/`-`), upper-cased; days 1-365;
+// limit 1-100 (news: 1-12); minValueUsd >= 0.
+const RESEARCH_TICKER_PATTERN = /^[A-Z][A-Z0-9.\-]{0,5}$/;
+const RESEARCH_MAX_DAYS = 365;
+const RESEARCH_MAX_LIMIT = 100;
+const RESEARCH_NEWS_MAX_LIMIT = 12;
+
+export function parseResearchTicker(value: string | undefined, required: true): string;
+export function parseResearchTicker(value: string | undefined, required: false): string | undefined;
+export function parseResearchTicker(value: string | undefined, required: boolean): string | undefined {
+  if (value === undefined || value.trim() === '') {
+    if (required) throw new Error('Missing required flag --ticker');
+    return undefined;
+  }
+  const ticker = value.trim().toUpperCase();
+  if (!RESEARCH_TICKER_PATTERN.test(ticker)) {
+    throw new Error('--ticker must be 1-6 uppercase letters/digits (e.g. NVDA, BRK.B)');
+  }
+  return ticker;
+}
+
+export function validateResearchWindowFlags(
+  days: string | undefined,
+  limit: string | undefined,
+  maxLimit: number = RESEARCH_MAX_LIMIT,
+): void {
+  validateOptionalPositiveInt('days', days, RESEARCH_MAX_DAYS);
+  validateOptionalPositiveInt('limit', limit, maxLimit);
+}
+
+export function validateMinValueUsdFlag(value: string | undefined): void {
+  if (value === undefined) return;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error('--min-value-usd must be a number >= 0');
+  }
+}
+
 function parseConversationOverageAsset(value: string | undefined): ConversationOverageAsset {
   const normalized = (value ?? 'USDC').toUpperCase();
   if (normalized !== 'USDC' && normalized !== 'SOL') {
@@ -998,6 +1037,172 @@ export const COMMANDS: CommandDef[] = [
         page: flags['page'],
         pageSize: flags['page-size'],
       });
+    },
+  },
+
+  // ── Research (market-level reads; API key only, no user id) ──
+
+  {
+    name: 'research-digest',
+    description:
+      'One-call 90-day disclosure digest for a US stock: insider Form 4 purchases, congressional trades, 8-K filings (whole-window counts/totals, top-5 notable rows, filing links)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA, BRK.B)', required: true },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      return client.getStockResearchDigest(ticker);
+    },
+  },
+
+  {
+    name: 'insider-transactions',
+    description:
+      "SEC Form 4 insider open-market purchases for a ticker, newest filing first (Milo's curated universe only — check meta.coverage.tracked)",
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+      { name: 'days', description: `Look-back window in days (default: 90, max: ${RESEARCH_MAX_DAYS})` },
+      { name: 'limit', description: `Max rows (default: 50, max: ${RESEARCH_MAX_LIMIT})` },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      validateResearchWindowFlags(flags['days'], flags['limit']);
+      return client.getInsiderTransactions({
+        ticker,
+        days: flags['days'],
+        limit: flags['limit'],
+      });
+    },
+  },
+
+  {
+    name: 'insider-buys',
+    description:
+      "Notable SEC Form 4 insider purchases across Milo's tracked universe, newest first, optionally above a USD value",
+    flags: [
+      { name: 'days', description: `Look-back window in days (default: 30, max: ${RESEARCH_MAX_DAYS})` },
+      { name: 'min-value-usd', description: 'Only purchases worth at least this many USD' },
+      { name: 'limit', description: `Max rows (default: 50, max: ${RESEARCH_MAX_LIMIT})` },
+    ],
+    handler: async (flags, client) => {
+      validateResearchWindowFlags(flags['days'], flags['limit']);
+      validateMinValueUsdFlag(flags['min-value-usd']);
+      return client.getRecentInsiderBuys({
+        days: flags['days'],
+        minValueUsd: flags['min-value-usd'],
+        limit: flags['limit'],
+      });
+    },
+  },
+
+  {
+    name: 'congress-trades',
+    description:
+      'Congressional PTR stock-trade disclosures for a ticker, or market-wide when --ticker is omitted (amount ranges, 30-45 day lag)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (omit for market-wide)' },
+      { name: 'days', description: `Look-back window in days by disclosure date (default: 90, max: ${RESEARCH_MAX_DAYS})` },
+      { name: 'limit', description: `Max rows (default: 50, max: ${RESEARCH_MAX_LIMIT})` },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], false);
+      validateResearchWindowFlags(flags['days'], flags['limit']);
+      return client.getCongressTrades({
+        ticker,
+        days: flags['days'],
+        limit: flags['limit'],
+      });
+    },
+  },
+
+  {
+    name: '8k-events',
+    description:
+      'Recent SEC 8-K material-event filings for a ticker with item codes and titles, newest acceptance first',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+      { name: 'days', description: `Look-back window in days by filing date (default: 90, max: ${RESEARCH_MAX_DAYS})` },
+      { name: 'limit', description: `Max rows (default: 50, max: ${RESEARCH_MAX_LIMIT})` },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      validateResearchWindowFlags(flags['days'], flags['limit']);
+      return client.get8kEvents({
+        ticker,
+        days: flags['days'],
+        limit: flags['limit'],
+      });
+    },
+  },
+
+  // Licensed (FMP-derived) research — OPTIONAL: the server mounts these routes
+  // only with MCP_LICENSED_RESEARCH_TOOLS=true (404 otherwise); 503
+  // provider_unavailable = upstream outage (retry), 404 = no data for ticker.
+
+  {
+    name: 'analyst-consensus',
+    description:
+      '[optional, licensed] Analyst consensus for a ticker: rating mix, price targets, recent grade actions (404 unless the server enables licensed research)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      return client.getAnalystConsensus(ticker);
+    },
+  },
+
+  {
+    name: 'fundamentals',
+    description:
+      '[optional, licensed] Quarterly fundamentals for a ticker: revenue, net income, free cash flow for the last 12 quarters (404 unless the server enables licensed research)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      return client.getStockFundamentals(ticker);
+    },
+  },
+
+  {
+    name: 'earnings-timeline',
+    description:
+      '[optional, licensed] Earnings timeline for a ticker: next scheduled report + up to 8 reported quarters with surprise % (404 unless the server enables licensed research)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      return client.getEarningsTimeline(ticker);
+    },
+  },
+
+  {
+    name: 'stock-news',
+    description:
+      '[optional, licensed] Recent news for a ticker with per-article sentiment in [-1, 1] (404 unless the server enables licensed research)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+      { name: 'limit', description: `Max articles (default: 8, max: ${RESEARCH_NEWS_MAX_LIMIT})` },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      validateResearchWindowFlags(undefined, flags['limit'], RESEARCH_NEWS_MAX_LIMIT);
+      return client.getStockNews({ ticker, limit: flags['limit'] });
+    },
+  },
+
+  {
+    name: 'peers',
+    description:
+      '[optional, licensed] Peer comparison for a ticker: the company first, then up to 5 peers by market cap with TTM multiples/margins (404 unless the server enables licensed research)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      return client.getPeerComparison(ticker);
     },
   },
 

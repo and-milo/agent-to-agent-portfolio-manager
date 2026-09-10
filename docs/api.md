@@ -13,7 +13,7 @@ Need an API key? [Contact us on Discord](https://discord.com/invite/join-milo)
 All endpoints (except signup) require one of:
 
 - `X-API-Key: mk_live_…` — a partner API key (full access to the key owner's data).
-- `Authorization: Bearer mat_…` — an MCP OAuth 2.1 access token obtained through the OAuth flow described in `docs/mcp.md`. The token is bound to one user and a set of scopes; each route requires a scope (`profile`, `portfolio:read`, `chat`, `strategies:write`, `trade`, `transfer`; research and signal-feed reads need any valid token). A token without the needed scope gets `403` with `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"`; an invalid or expired token gets `401` with `WWW-Authenticate: Bearer error="invalid_token", resource_metadata="…"`. Refresh with `POST /oauth/token` (`grant_type=refresh_token`).
+- `Authorization: Bearer mat_…` — an MCP OAuth 2.1 access token obtained through the OAuth flow described in `docs/mcp.md`. The token is bound to one user and a set of scopes; each route requires a scope (`profile`, `portfolio:read`, `chat`, `strategies:write`, `trade`, `transfer`; research and signal-feed reads need any valid token). Strategy create/update need `strategies:write`; strategy **sync** and delete need `trade` (sync re-applies the strategy onto the live account's settings). Conversation routes need `chat`, and the agent behind a conversation only gets the order/swap/position tools if the token also carries `trade`, the send-tokens tool with `transfer`, and strategy create/edit tools with `strategies:write`. A token without the needed scope gets `403` with `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"`; an invalid or expired token gets `401` with `WWW-Authenticate: Bearer error="invalid_token", resource_metadata="…"`. Refresh with `POST /oauth/token` (`grant_type=refresh_token`).
 
 ```bash
 curl -H "X-API-Key: mk_live_..." https://partners.andmilo.com/api/v1/users/{userId}/positions
@@ -48,7 +48,8 @@ Notes:
 - `Accept` should include `application/json` and `text/event-stream` for POST.
 - `POST /mcp` initialize accepts optional `X-API-Key` **or** `Authorization: Bearer mat_…` (OAuth 2.1; the bearer must then be sent on every request).
 - If omitted, the session starts unauthenticated: signup/public tools work, `tools/list` works, and the first `tools/call` returns `401` with a `WWW-Authenticate` challenge pointing at `/.well-known/oauth-protected-resource/mcp` so OAuth-capable clients (Claude, ChatGPT, Inspector) connect; the session is then upgraded in place. API-key sessions keep working exactly as before.
-- OAuth sessions only see tools covered by the granted scopes (`profile`, `portfolio:read`, `chat`, `strategies:write`; `trade`/`transfer` are never granted to directory clients) and `userId` arguments default to the signed-in user.
+- OAuth sessions only see tools covered by the granted scopes (`profile`, `portfolio:read`, `chat`, `strategies:write`; `trade`/`transfer` are never granted to directory clients — `sync_strategy` is a `trade` tool) and `userId` arguments default to the signed-in user.
+- After an anonymous session runs `signup`, the session is bound to the returned API key in place: the next `get_me` (or any protected tool) works without re-initializing.
 - MCP tools that forward paginated endpoints enforce `page <= 100` and `pageSize <= 100`.
 - Abuse protections and request throttling are enforced. Initialize may return `429` during high load.
 - MCP sessions are bounded and idle sessions can be evicted; if a session expires, re-initialize.
@@ -427,7 +428,7 @@ All fields from create are optional.
 
 `POST /api/v1/users/{userId}/auto-trade-settings/strategies/{strategyId}/sync`
 
-Re-applies the latest strategy snapshot to your auto-trade settings. Use this when `strategySync.synced` is `false` in the GET settings response.
+Re-applies the latest strategy snapshot to your auto-trade settings. Use this when `strategySync.synced` is `false` in the GET settings response. Because it changes what the live account trades, OAuth tokens need the `trade` scope here (`strategies:write` covers create/update only).
 
 **Strategy workflow:**
 
@@ -592,10 +593,19 @@ curl "https://partners.andmilo.com/api/v1/research/digest?ticker=NVDA" \
 The list routes return `{ "data": [...rows], "meta": { ticker, days, limit, count, source, coverage? } }`
 with the same row shapes.
 
+Digest statistics are whole-window aggregates: `insider.count` / `insider.totalValueUsd`,
+`congress.count` / `purchases` / `sales` and `sec8k.count` are computed over every disclosure in the
+90-day window (not a capped page), and `insider.notable` / `congress.notable` are the top 5 by
+disclosed value across the whole window — an older large purchase is never dropped in favour of a
+newer small one. `sec8k.latest` is the 5 most recent filings.
+
 **Licensed (FMP-derived) — mounted only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true`
 (default off; redistributing this data through third-party assistants needs a licensing decision).
 When off these routes return `404 not_found`; when on but `FMP_API_KEY` is absent they return
-`503 service_unavailable` with a clear message; a ticker the provider has no data for returns `404`.**
+`503 service_unavailable` with a clear message; when the upstream provider fails (timeout, HTTP
+error, network) they return `503 provider_unavailable` — transient, retry after a short delay; a
+ticker the provider answered for but has no data on returns `404 not_found`. A `404` on these routes
+therefore always means "no data", never an outage.**
 
 | Route                                    | Query                        | Returns                                                                        |
 | ---------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------ |
@@ -606,7 +616,7 @@ When off these routes return `404 not_found`; when on but `FMP_API_KEY` is absen
 | `GET /api/v1/research/peers`             | `ticker`                     | The company first, then up to 5 peers by market cap with TTM multiples/margins |
 
 Any data-layer failure on a research route returns `503 service_unavailable` with a generic
-message (never internal details).
+message (never internal details). Both `503` codes are retryable; `404` is not.
 
 ---
 
@@ -1369,5 +1379,6 @@ Retry behavior: wait for `Retry-After` before retrying.
 | 404    | `not_found`           | Resource not found                        |
 | 409    | `error`               | Conflict (e.g. wallet already registered) |
 | 429    | `rate_limit_exceeded` | Rate limit exceeded                       |
-| 503    | `service_unavailable` | Research data source unavailable / not configured |
+| 503    | `service_unavailable` | Research data source unavailable / not configured (retryable) |
+| 503    | `provider_unavailable` | Licensed research: upstream provider (FMP) failed — retry shortly; distinct from `404` no-data |
 | 500    | `internal_error`      | Server error                              |

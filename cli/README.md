@@ -23,7 +23,7 @@ The same partner-api server exposes MCP on `/mcp` (Streamable HTTP).
 MCP tools are annotated read-only vs destructive (money-moving/irreversible tools carry `destructiveHint: true` and a ⚠️ warning in the description); see `docs/mcp.md`.  
 This CLI continues to use the REST endpoints directly.
 
-Research endpoints (`GET /api/v1/research/digest|insider-transactions|insider-buys|congress-trades|8k-events`, API key only, no user id) are available over REST and as synchronous MCP tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`); they are not yet wrapped as CLI commands — call them with `curl` (see `docs/api.md`, "Research").
+Research endpoints (`GET /api/v1/research/*`, API key only, no user id) are available over REST, as synchronous MCP tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) and as the CLI commands under "Stock research" below.
 
 ## Authentication
 
@@ -97,6 +97,23 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `diary-logs` | Get auto-trade diary logs |
 | `config` | Show or update `~/.milo/config.json` |
 
+### Stock research (API key only, no user id)
+
+| Command | Description |
+|---------|-------------|
+| `research-digest` | One-call 90-day disclosure digest for a ticker: insider Form 4 purchases, congressional trades, 8-K filings — whole-window counts/totals, top-5 notable rows, filing links |
+| `insider-transactions` | SEC Form 4 insider open-market purchases for a ticker (Milo's curated universe only — check `meta.coverage.tracked`) |
+| `insider-buys` | Notable insider purchases across Milo's tracked universe, optionally above `--min-value-usd` |
+| `congress-trades` | Congressional PTR disclosures for a ticker, or market-wide when `--ticker` is omitted |
+| `8k-events` | SEC 8-K material-event filings for a ticker with item codes and titles |
+| `analyst-consensus` | *(optional, licensed)* Analyst rating mix, price targets, recent grade actions |
+| `fundamentals` | *(optional, licensed)* Quarterly revenue / net income / free cash flow (12 quarters) |
+| `earnings-timeline` | *(optional, licensed)* Next scheduled report + up to 8 reported quarters with surprise % |
+| `stock-news` | *(optional, licensed)* Recent news with per-article sentiment (`--limit` max 12) |
+| `peers` | *(optional, licensed)* The company + up to 5 peers by market cap with TTM multiples/margins |
+
+The five *optional, licensed* commands are FMP-derived and only work against a server running with `MCP_LICENSED_RESEARCH_TOOLS=true` — otherwise they return `404 not_found`. On an enabled server: `503 service_unavailable` means `FMP_API_KEY` is missing, `503 provider_unavailable` means the upstream provider failed (transient — retry shortly), and `404 not_found` means the provider answered and has no data for that ticker. Every `503` on a research route is retryable; a `404` is not an outage.
+
 ## Guardrails and Throttling
 
 - `create-order` preflight validation enforces:
@@ -124,6 +141,7 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
   - Use `--data-sources-json null` or `--asset-class-settings-json null` on update endpoints to clear saved values.
 - Some write-heavy commands are more likely to receive `429` during bursts (for example order creation, close-all positions, and conversation writes). Build retries with backoff.
 - On `429`, respect `Retry-After` and retry only after that delay.
+- Research commands validate `--ticker` (1-6 letters/digits, `.`/`-`; upper-cased), `--days` (1-365), `--limit` (1-100; `stock-news` 1-12) and `--min-value-usd` (>= 0) locally before calling the API, mirroring the server's `400 bad_request` rules.
 
 ## Examples
 
@@ -189,6 +207,18 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 ./dist/milo list-quests --unclaimed true
 ./dist/milo claim-quest --quest-id <uuid>
 ./dist/milo bones-balance
+
+# Stock research — synchronous disclosure reads (no user id needed)
+./dist/milo research-digest --ticker NVDA
+./dist/milo insider-transactions --ticker NVDA --days 90 --limit 50
+./dist/milo insider-buys --days 30 --min-value-usd 100000
+./dist/milo congress-trades                      # market-wide
+./dist/milo congress-trades --ticker NVDA --days 60
+./dist/milo 8k-events --ticker NVDA
+# Licensed (FMP-derived) — only on servers with MCP_LICENSED_RESEARCH_TOOLS=true
+./dist/milo analyst-consensus --ticker NVDA
+./dist/milo earnings-timeline --ticker NVDA
+./dist/milo stock-news --ticker NVDA --limit 12
 ```
 
 ## Development
