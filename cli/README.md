@@ -2,6 +2,8 @@
 
 TypeScript CLI for the Milo Partner API. Zero runtime dependencies, single-file bundle via tsup.
 
+Transaction signatures are opaque and may identify legacy, v0, or v1 Solana transactions. The CLI stores and forwards them unchanged.
+
 ## Prerequisites
 
 - Node.js 22+

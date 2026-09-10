@@ -30,6 +30,8 @@ There is no centralized order book. No custodial exchange. Your tokens stay in y
 6. The signed transaction is submitted to Solana for on-chain settlement
 7. Order status updates to `fulfilled` with the transaction signature
 
+Transaction signatures are opaque identifiers and may identify legacy, v0, or v1 transactions.
+
 ## Fully Decentralized
 
 Milo never takes custody of your funds.

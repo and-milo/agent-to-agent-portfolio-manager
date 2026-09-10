@@ -8,6 +8,8 @@ description: Autonomous Solana portfolio management. Non-custodial wallets, auto
 
 Milo is an autonomous Solana portfolio manager. Through this API you can register users, create non-custodial wallets, send tokens, place buy/sell orders, manage positions, configure auto-trading strategies, and converse with Milo's AI agents.
 
+Transaction signatures returned by Milo are opaque identifiers. They may refer to legacy, v0, or v1 Solana transactions; clients must not infer the wire version from the signature.
+
 ## Getting Started — First-Time Onboarding
 
 Follow these 4 steps to go from zero to a fully active Milo account.
