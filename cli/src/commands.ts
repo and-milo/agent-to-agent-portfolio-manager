@@ -457,7 +457,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'pause-order',
-    description: 'Pause an active order',
+    description: '⚠️ Replaces live state: pausing an order stops it executing — pausing a stop-loss/take-profit leaves the position unprotected until re-activated. Pause an active order',
     flags: [
       { name: 'order-id', description: 'Order ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
@@ -679,7 +679,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'update-strategy',
-    description: 'Update an existing strategy',
+    description: '⚠️ Replaces live state: every flag you pass overwrites the saved value (no merge); a strategy linked to an active account changes what it trades once re-synced. Update an existing strategy',
     flags: [
       { name: 'strategy-id', description: 'Strategy ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
@@ -743,7 +743,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'sync-strategy',
-    description: 'Re-sync auto-trade settings with a linked strategy',
+    description: "⚠️ Replaces live state: re-applies the strategy's allocation/instructions onto the LIVE trading account while trading stays active. Re-sync auto-trade settings with a linked strategy",
     flags: [
       { name: 'strategy-id', description: 'Strategy ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
@@ -759,7 +759,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'create-conversation',
-    description: 'Start a conversation with a Milo AI agent',
+    description: '⚠️ May trigger trades: the auto-trader agent can act on the message (update autotrade settings, close positions). Start a conversation with a Milo AI agent',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
       { name: 'message', description: 'Initial message', required: true },
@@ -812,7 +812,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'send-message',
-    description: 'Send a message to a conversation',
+    description: '⚠️ May trigger trades: the auto-trader agent can act on the message (update autotrade settings, close positions). Send a message to a conversation',
     flags: [
       { name: 'conversation-id', description: 'Conversation ID', required: true },
       { name: 'message', description: 'Message text', required: true },

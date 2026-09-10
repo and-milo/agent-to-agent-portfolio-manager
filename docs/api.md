@@ -54,7 +54,7 @@ Notes:
 - Abuse protections and request throttling are enforced. Initialize may return `429` during high load.
 - MCP sessions are bounded and idle sessions can be evicted; if a session expires, re-initialize.
 - If a session expires, sessioned calls return invalid-session errors and the client should re-initialize.
-- Tools carry a `title` and MCP annotations: read-only tools are `readOnlyHint: true`; money-moving/irreversible tools are `destructiveHint: true` with a leading `⚠️` warning in the description. Full list in `docs/mcp.md`.
+- Tools carry a `title` and MCP annotations: read-only tools are `readOnlyHint: true`; money-moving/irreversible tools, state-replacing tools (`sync_strategy`, `update_strategy`, `pause_order`) and the conversation writes (`create_conversation`, `send_message` — the agent can update autotrade settings or close positions when asked) are `destructiveHint: true` with a leading `⚠️` warning in the description. Only signup, `create_strategy` and `claim_quest` are additive writes. Full list in `docs/mcp.md`.
 - The server's `instructions` describe Milo as both a stock research product (analyst ratings, insider/congress/8-K events, fundamentals, earnings) and an autonomous trading-agent product (crypto on Solana + brokered US equities).
 - Synchronous research tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) mirror the `/api/v1/research/*` routes: market-level reads (API key only, no userId), `readOnlyHint: true`, ticker validated (1-6 chars), `days`/`limit` clamped to 365/100, a short text summary plus `structuredContent`. The FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) are registered only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
 
@@ -507,7 +507,11 @@ Coverage caveats (stated in every response):
 - Form 4 ingestion is **purchases only** (transaction code `P`) and covers only Milo's curated
   US-equity universe — `meta.coverage.tickers` lists it and `meta.coverage.tracked` says whether
   the requested ticker is in it. An empty result for an untracked ticker means "not tracked", not
-  "no insider activity".
+  "no insider activity". Coverage is issuer-aware: share classes of one SEC registrant (GOOG/GOOGL,
+  BRK.A/BRK.B) share a CIK, filings are stored under one canonical ticker
+  (`meta.coverage.canonicalTicker`, e.g. `GOOGL` for a `GOOG` query; `meta.coverage.aliases` lists
+  the issuer's tickers) and a query for any alias returns the same rows with `tracked: true` when the
+  canonical ticker is covered. The digest reports the same under `insider.canonicalTicker`.
 - Congressional PTRs are market-wide, polled every 1-4h, disclose amount **ranges** (never exact
   amounts) and lag the trade by up to 30-45 days. 8-K filings are market-wide, polled ~every 30 min.
 
@@ -526,6 +530,7 @@ curl "https://partners.andmilo.com/api/v1/research/digest?ticker=NVDA" \
     "generatedAt": "2026-09-10T12:00:00.000Z",
     "insider": {
       "tracked": true,
+      "canonicalTicker": "NVDA",
       "count": 1,
       "totalValueUsd": 120500,
       "notable": [

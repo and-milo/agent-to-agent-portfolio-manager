@@ -20,7 +20,7 @@ The build produces `dist/milo` — a self-contained executable.
 
 The same partner-api server exposes MCP on `/mcp` (Streamable HTTP).  
 `POST /mcp` initialize accepts optional `X-API-Key` or an OAuth 2.1 bearer token (`Authorization: Bearer mat_…`; discovery at `/.well-known/oauth-authorization-server`, consent with your Solana wallet). Without either, MCP is limited to signup/public tools and `tools/list` until `signup` returns an API key or the first `tools/call` triggers the OAuth `401` challenge. The CLI itself keeps using API keys. Throttling and session-capacity protections are enforced, so initialize can return `429`. Respect `Retry-After` before retrying and re-initialize after invalid-session errors.  
-MCP tools are annotated read-only vs destructive (money-moving/irreversible tools carry `destructiveHint: true` and a ⚠️ warning in the description); see `docs/mcp.md`.  
+MCP tools are annotated read-only vs destructive: money-moving/irreversible tools, state-replacing tools (`sync_strategy`, `update_strategy`, `pause_order`) and the conversation writes (`create_conversation`, `send_message` — the agent can update autotrade settings or close positions when asked) carry `destructiveHint: true` and a ⚠️ warning in the description; only signup, `create_strategy` and `claim_quest` are additive writes. The matching CLI commands (`pause-order`, `update-strategy`, `sync-strategy`, `create-conversation`, `send-message`) carry the same ⚠️ in their help text — confirm before running them; see `docs/mcp.md`.  
 This CLI continues to use the REST endpoints directly.
 
 Research endpoints (`GET /api/v1/research/*`, API key only, no user id) are available over REST, as synchronous MCP tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) and as the CLI commands under "Stock research" below.
@@ -71,7 +71,7 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `create-order` | Create a buy/sell order with optional TP/SL |
 | `list-orders` | List orders with filters |
 | `get-order` | Get order details |
-| `pause-order` | Pause an active order |
+| `pause-order` | ⚠️ Pause an active order (pausing a stop-loss/take-profit leaves the position unprotected) |
 | `activate-order` | Activate a draft/paused order |
 | `delete-order` | Archive an order |
 | `send-tokens` | Send tokens from your Milo wallet |
@@ -80,19 +80,19 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `list-strategies` | List autotrade strategies |
 | `get-strategy` | Get strategy details |
 | `create-strategy` | Create a strategy |
-| `update-strategy` | Update a strategy |
+| `update-strategy` | ⚠️ Update a strategy (passed fields overwrite saved values; affects a linked live account once re-synced) |
 | `delete-strategy` | Delete a strategy |
-| `sync-strategy` | Re-sync settings with a linked strategy |
+| `sync-strategy` | ⚠️ Re-sync settings with a linked strategy (replaces the live account's allocation/instructions) |
 | `deploy-arena` | Deploy a public strategy to the arena |
 | `withdraw-arena` | Withdraw from the arena (transfers holdings back) |
 | `arena-leaderboard` | Get the arena leaderboard |
 | `list-quests` | List quests with progress and bones rewards (defaults to unlocked) |
 | `claim-quest` | Claim bones (reward points) for a completed quest |
 | `bones-balance` | Get your bones (reward points) balance |
-| `create-conversation` | Start a conversation with Milo AI |
+| `create-conversation` | ⚠️ Start a conversation with Milo AI (the auto-trader agent may change settings / close positions when asked) |
 | `list-conversations` | List conversations |
 | `get-conversation` | Get conversation details |
-| `send-message` | Send a message to a conversation |
+| `send-message` | ⚠️ Send a message to a conversation (the auto-trader agent may change settings / close positions when asked) |
 | `get-messages` | Get messages (poll `processing` flag) |
 | `diary-logs` | Get auto-trade diary logs |
 | `config` | Show or update `~/.milo/config.json` |
