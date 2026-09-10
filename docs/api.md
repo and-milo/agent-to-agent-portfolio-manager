@@ -10,13 +10,29 @@ Need an API key? [Contact us on Discord](https://discord.com/invite/join-milo)
 
 ## Authentication
 
-All endpoints (except signup) require the `X-API-Key` header:
+All endpoints (except signup) require one of:
+
+- `X-API-Key: mk_live_…` — a partner API key (full access to the key owner's data).
+- `Authorization: Bearer mat_…` — an MCP OAuth 2.1 access token obtained through the OAuth flow described in `docs/mcp.md`. The token is bound to one user and a set of scopes; each route requires a scope (`profile`, `portfolio:read`, `chat`, `strategies:write`, `trade`, `transfer`; research and signal-feed reads need any valid token). A token without the needed scope gets `403` with `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"`; an invalid or expired token gets `401` with `WWW-Authenticate: Bearer error="invalid_token", resource_metadata="…"`. Refresh with `POST /oauth/token` (`grant_type=refresh_token`).
 
 ```bash
 curl -H "X-API-Key: mk_live_..." https://partners.andmilo.com/api/v1/users/{userId}/positions
+curl -H "Authorization: Bearer mat_..." https://partners.andmilo.com/api/v1/users/{userId}/positions
 ```
 
-User-scoped endpoints use `{userId}` in the path. Wallet-scoped endpoints use `{walletId}`.
+User-scoped endpoints use `{userId}` in the path. Wallet-scoped endpoints use `{walletId}`. With an OAuth token, `{userId}` must be the token's user.
+
+### OAuth 2.1 endpoints (MCP authorization server)
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /.well-known/oauth-authorization-server` | RFC 8414 metadata (PKCE S256, `client_id_metadata_document_supported`, `iss` on responses) |
+| `GET /.well-known/oauth-protected-resource[/mcp]` | RFC 9728 metadata for the `/mcp` resource |
+| `POST /oauth/register` | RFC 7591 dynamic client registration (JSON) |
+| `GET /oauth/authorize` | authorization request (`response_type=code`, `code_challenge_method=S256`, optional `scope`, `state`, `resource`) → consent page |
+| `GET /oauth/consent?rid=…` | consent page (Solana wallet sign-in or reviewer login) |
+| `POST /oauth/token` | `authorization_code` / `refresh_token` grants, form-urlencoded |
+| `POST /oauth/revoke` | RFC 7009 revocation (revoking a refresh token revokes the whole connection) |
 
 ## MCP Endpoint
 
@@ -30,12 +46,16 @@ Notes:
 
 - Use `Mcp-Session-Id` for sessioned requests after initialization.
 - `Accept` should include `application/json` and `text/event-stream` for POST.
-- `POST /mcp` initialize accepts optional `X-API-Key`.
-- If omitted, the session starts unauthenticated and only signup/public MCP tools are usable until `signup` returns an API key.
+- `POST /mcp` initialize accepts optional `X-API-Key` **or** `Authorization: Bearer mat_…` (OAuth 2.1; the bearer must then be sent on every request).
+- If omitted, the session starts unauthenticated: signup/public tools work, `tools/list` works, and the first `tools/call` returns `401` with a `WWW-Authenticate` challenge pointing at `/.well-known/oauth-protected-resource/mcp` so OAuth-capable clients (Claude, ChatGPT, Inspector) connect; the session is then upgraded in place. API-key sessions keep working exactly as before.
+- OAuth sessions only see tools covered by the granted scopes (`profile`, `portfolio:read`, `chat`, `strategies:write`; `trade`/`transfer` are never granted to directory clients) and `userId` arguments default to the signed-in user.
 - MCP tools that forward paginated endpoints enforce `page <= 100` and `pageSize <= 100`.
 - Abuse protections and request throttling are enforced. Initialize may return `429` during high load.
 - MCP sessions are bounded and idle sessions can be evicted; if a session expires, re-initialize.
 - If a session expires, sessioned calls return invalid-session errors and the client should re-initialize.
+- Tools carry a `title` and MCP annotations: read-only tools are `readOnlyHint: true`; money-moving/irreversible tools are `destructiveHint: true` with a leading `⚠️` warning in the description. Full list in `docs/mcp.md`.
+- The server's `instructions` describe Milo as both a stock research product (analyst ratings, insider/congress/8-K events, fundamentals, earnings) and an autonomous trading-agent product (crypto on Solana + brokered US equities).
+- Synchronous research tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) mirror the `/api/v1/research/*` routes: market-level reads (API key only, no userId), `readOnlyHint: true`, ticker validated (1-6 chars), `days`/`limit` clamped to 365/100, a short text summary plus `structuredContent`. The FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) are registered only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
 
 Client setup examples (OpenAI Codex + Claude Desktop): see `docs/mcp.md`.
 
@@ -460,6 +480,136 @@ applied before an LLM ever sees the candidate.
 
 ---
 
+### Research
+
+Synchronous, read-only **stock research** reads. They are market-level: no `userId` or
+`walletId`, just an API key. All routes live under `/api/v1/research/`, accept a `ticker`
+query parameter (1-6 chars, letters/digits, `.`/`-` allowed, case-insensitive — normalized
+to upper case; invalid tickers return `400 bad_request`), cap `limit` at 100 and `days` at 365
+(out-of-range values return `400`), and are rate-limited at 60 requests/min per API key.
+
+Every response carries `meta.source` (what the data is and how fresh) and, where relevant,
+`meta.coverage`. These are public disclosures, not recommendations.
+
+**Unmetered (public SEC / congressional data Milo ingests and stores):**
+
+| Route                                    | Query                                   | Returns                                                                                   |
+| ---------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `GET /api/v1/research/insider-transactions` | `ticker` (required), `days=90`, `limit=50` | SEC Form 4 insider open-market **purchases** for the ticker (newest filing first)         |
+| `GET /api/v1/research/insider-buys`      | `days=30`, `minValueUsd`, `limit=50`    | Notable insider purchases across Milo's tracked universe                                  |
+| `GET /api/v1/research/congress-trades`   | `ticker` (optional), `days=90`, `limit=50` | Congressional PTR disclosures for the ticker, or market-wide when omitted                |
+| `GET /api/v1/research/8k-events`         | `ticker` (required), `days=90`, `limit=50` | SEC 8-K filings with `items` (codes) and `itemSummaries` (titles)                        |
+| `GET /api/v1/research/digest`            | `ticker` (required)                     | One-call 90-day digest composing the three above (counts, notable rows, filing links)      |
+
+Coverage caveats (stated in every response):
+
+- Form 4 ingestion is **purchases only** (transaction code `P`) and covers only Milo's curated
+  US-equity universe — `meta.coverage.tickers` lists it and `meta.coverage.tracked` says whether
+  the requested ticker is in it. An empty result for an untracked ticker means "not tracked", not
+  "no insider activity".
+- Congressional PTRs are market-wide, polled every 1-4h, disclose amount **ranges** (never exact
+  amounts) and lag the trade by up to 30-45 days. 8-K filings are market-wide, polled ~every 30 min.
+
+```bash
+curl "https://partners.andmilo.com/api/v1/research/digest?ticker=NVDA" \
+  -H "X-API-Key: $API_KEY"
+```
+
+**Response (digest):**
+
+```json
+{
+  "data": {
+    "ticker": "NVDA",
+    "windowDays": 90,
+    "generatedAt": "2026-09-10T12:00:00.000Z",
+    "insider": {
+      "tracked": true,
+      "count": 1,
+      "totalValueUsd": 120500,
+      "notable": [
+        {
+          "accessionNumber": "0001045810-26-000123",
+          "ticker": "NVDA",
+          "cik": "0001045810",
+          "filerName": "Jane Director",
+          "filerRole": { "isDirector": true, "isOfficer": false, "isTenPercentOwner": false, "isOther": false, "officerTitle": null },
+          "code": "P",
+          "transactionDate": "2026-08-01T00:00:00.000Z",
+          "shares": 1000,
+          "price": 120.5,
+          "valueUsd": 120500,
+          "postShares": 5000,
+          "filedAt": "2026-08-02T21:00:00.000Z",
+          "filingUrl": "https://www.sec.gov/Archives/edgar/data/1045810/000104581026000123/"
+        }
+      ]
+    },
+    "congress": {
+      "count": 2,
+      "purchases": 1,
+      "sales": 1,
+      "notable": [
+        {
+          "eventKey": "…",
+          "chamber": "senate",
+          "memberName": "Jane Senator",
+          "district": "RI",
+          "party": null,
+          "symbol": "NVDA",
+          "assetDescription": "NVIDIA Corporation",
+          "type": "Purchase",
+          "amountBucket": "$100,001 - $250,000",
+          "amountMinUsd": 100001,
+          "transactionDate": "2026-05-08T00:00:00.000Z",
+          "disclosureDate": "2026-06-02T00:00:00.000Z",
+          "link": "https://efdsearch.senate.gov/…"
+        }
+      ]
+    },
+    "sec8k": {
+      "count": 1,
+      "latest": [
+        {
+          "eventKey": "…",
+          "symbol": "NVDA",
+          "cik": "1045810",
+          "filingDate": "2026-08-27T00:00:00.000Z",
+          "acceptedDate": "2026-08-27T20:05:00.000Z",
+          "items": ["2.02", "9.01"],
+          "itemSummaries": ["2.02 Results of Operations and Financial Condition", "9.01 Financial Statements and Exhibits"],
+          "link": "https://www.sec.gov/Archives/edgar/data/…/",
+          "finalLink": "https://www.sec.gov/Archives/edgar/data/…/nvda-8k.htm"
+        }
+      ]
+    },
+    "sources": { "secForm4": "…", "congressPtr": "…", "sec8k": "…" },
+    "coverage": { "insiderTickers": ["AAPL", "AMZN", "AVGO", "GOOGL", "META", "MSFT", "NVDA", "TSLA"], "note": "…" }
+  }
+}
+```
+
+The list routes return `{ "data": [...rows], "meta": { ticker, days, limit, count, source, coverage? } }`
+with the same row shapes.
+
+**Licensed (FMP-derived) — mounted only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true`
+(default off; redistributing this data through third-party assistants needs a licensing decision).
+When off these routes return `404 not_found`; when on but `FMP_API_KEY` is absent they return
+`503 service_unavailable` with a clear message; a ticker the provider has no data for returns `404`.**
+
+| Route                                    | Query                        | Returns                                                                        |
+| ---------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------ |
+| `GET /api/v1/research/analyst-consensus` | `ticker`                     | Rating mix, consensus label, price targets (low/high/median/consensus), recent grade actions |
+| `GET /api/v1/research/fundamentals`      | `ticker`                     | Revenue / net income / free cash flow for the last 12 reported quarters        |
+| `GET /api/v1/research/earnings-timeline` | `ticker`                     | Next scheduled report + up to 8 reported quarters (actual vs estimate, surprise %) |
+| `GET /api/v1/research/news`              | `ticker`, `limit=8` (max 12) | Recent news with publisher, link, snippet and sentiment in [-1, 1]              |
+| `GET /api/v1/research/peers`             | `ticker`                     | The company first, then up to 5 peers by market cap with TTM multiples/margins |
+
+Any data-layer failure on a research route returns `503 service_unavailable` with a generic
+message (never internal details).
+
+---
+
 ### Arena
 
 Deploy a public strategy to the arena leaderboard. Milo creates a custody wallet, funds it with the requested SOL amount, and trades autonomously using the strategy. The strategy must be public and owned by the user. Deployment requires at least 1 SOL plus network fees. Withdrawing transfers all holdings back to the user's Milo wallet.
@@ -873,7 +1023,7 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/conversations \
 
 | Agent          | Value            | Purpose                                  |
 | -------------- | ---------------- | ---------------------------------------- |
-| Market Analyst | `market-analyst` | Token research, technicals, sentiment    |
+| Market Analyst | `market-analyst` | Equities research (analyst ratings, insider/congress/8-K, fundamentals, earnings) + token research, technicals, sentiment |
 | Auto Trader    | `auto-trader`    | Strategy discussion, can update settings |
 
 **Response (201):**
@@ -1219,4 +1369,5 @@ Retry behavior: wait for `Retry-After` before retrying.
 | 404    | `not_found`           | Resource not found                        |
 | 409    | `error`               | Conflict (e.g. wallet already registered) |
 | 429    | `rate_limit_exceeded` | Rate limit exceeded                       |
+| 503    | `service_unavailable` | Research data source unavailable / not configured |
 | 500    | `internal_error`      | Server error                              |

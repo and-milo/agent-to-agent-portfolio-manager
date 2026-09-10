@@ -19,8 +19,11 @@ The build produces `dist/milo` — a self-contained executable.
 ## MCP Endpoint
 
 The same partner-api server exposes MCP on `/mcp` (Streamable HTTP).  
-`POST /mcp` initialize accepts optional `X-API-Key`; without it, MCP is limited to signup/public tools until `signup` returns an API key. Throttling and session-capacity protections are enforced, so initialize can return `429`. Respect `Retry-After` before retrying and re-initialize after invalid-session errors.  
+`POST /mcp` initialize accepts optional `X-API-Key` or an OAuth 2.1 bearer token (`Authorization: Bearer mat_…`; discovery at `/.well-known/oauth-authorization-server`, consent with your Solana wallet). Without either, MCP is limited to signup/public tools and `tools/list` until `signup` returns an API key or the first `tools/call` triggers the OAuth `401` challenge. The CLI itself keeps using API keys. Throttling and session-capacity protections are enforced, so initialize can return `429`. Respect `Retry-After` before retrying and re-initialize after invalid-session errors.  
+MCP tools are annotated read-only vs destructive (money-moving/irreversible tools carry `destructiveHint: true` and a ⚠️ warning in the description); see `docs/mcp.md`.  
 This CLI continues to use the REST endpoints directly.
+
+Research endpoints (`GET /api/v1/research/digest|insider-transactions|insider-buys|congress-trades|8k-events`, API key only, no user id) are available over REST and as synchronous MCP tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`); they are not yet wrapped as CLI commands — call them with `curl` (see `docs/api.md`, "Research").
 
 ## Authentication
 

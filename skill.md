@@ -108,6 +108,7 @@ That's it — Milo is now managing your portfolio. Read on for the full feature 
 | **Send tokens to another wallet** | "Wallet Actions" (under Complete API Reference) |
 | **Check positions, holdings, or PnL** | "Recipe 4: Fetch your positions" and "Portfolio" (under Complete API Reference) |
 | **Chat with Milo's AI agents** | "Recipe 3: Talk with Milo" / "Recipe 6: Ask about a token" and "Conversations" (under Complete API Reference) |
+| **Look up insider / congress / 8-K disclosures for a stock** | "Stock Research (synchronous)" |
 | **Understand the full onboarding flow** | "Quick Start" and "First Boot Protocol" |
 | **Set up a recurring portfolio check-in** | "Heartbeat Protocol" |
 
@@ -121,6 +122,7 @@ That's it — Milo is now managing your portfolio. Read on for the full feature 
 - **Quests & Bones** — Complete quests (event-driven tasks like trades, signups) to earn bones (reward points). Check quests regularly and claim bones for completed quests.
 - **AI conversations** — Chat with Milo's market analyst, auto-trader, or game agent. Async processing with polling.
 - **Portfolio data** — Holdings, transactions, executed transactions, diary logs.
+- **Stock research (synchronous)** — `GET /api/v1/research/*`: SEC Form 4 insider purchases, congressional PTR trades, SEC 8-K events and a one-call digest per ticker. API key only, no userId. See "Stock Research (synchronous)".
 
 ## Quick Start
 
@@ -153,7 +155,7 @@ All authenticated requests require the header:
 ```
 X-API-Key: <api_key>
 ```
-(NOT `Authorization: Bearer` — the API uses the `X-API-Key` header.)
+Alternatively, an MCP OAuth 2.1 access token (obtained through the OAuth flow at `{{BASE_URL}}/.well-known/oauth-authorization-server`, see "MCP Access") is accepted as `Authorization: Bearer mat_…` on every endpoint, scope-checked per route.
 
 ## MCP Access
 
@@ -162,9 +164,13 @@ The partner API server exposes MCP on the same host at `/mcp` using Streamable H
 - `GET /mcp` for SSE stream
 - `DELETE /mcp` for session termination
 
-`POST /mcp` initialize accepts optional `X-API-Key`. If omitted, the MCP session starts unauthenticated and only signup/public tools are usable until `signup` returns an API key. Request throttling and session-capacity protections are enforced, so initialize may return `429`. On `429`, respect `Retry-After` and retry after the indicated delay. Sessions can also expire, so re-initialize after invalid-session errors.
+`POST /mcp` initialize accepts optional `X-API-Key`, or an OAuth 2.1 bearer token (`Authorization: Bearer mat_…`, sent on every request). Without either, the MCP session starts unauthenticated: signup/public tools and `tools/list` work, and the first `tools/call` returns `401` with `WWW-Authenticate: Bearer … resource_metadata="{{BASE_URL}}/.well-known/oauth-protected-resource/mcp", scope="profile portfolio:read chat strategies:write offline_access"` — OAuth-capable clients (Claude, ChatGPT, MCP Inspector) then run discovery (`/.well-known/oauth-authorization-server`), register (RFC 7591 or a Client ID Metadata Document URL), send the user to the consent page (`/oauth/consent`, Solana wallet sign-in) and resume on the same session. OAuth sessions only see tools covered by the granted scopes (never `trade`/`transfer` for directory clients) and `userId` arguments default to the signed-in user; API-key sessions are unchanged. Request throttling and session-capacity protections are enforced, so initialize may return `429`. On `429`, respect `Retry-After` and retry after the indicated delay. Sessions can also expire, so re-initialize after invalid-session errors.
 
 For sessioned requests after initialize, send `Mcp-Session-Id`.
+
+MCP tools carry a `title` and MCP annotations. Read-only tools are `readOnlyHint: true`. Money-moving or irreversible tools (`close_position`, `close_all_positions`, `create_order`, `activate_order`, `delete_order`, `send_tokens`, `update_autotrade_settings`, `update_account_autotrade_settings`, `delete_strategy`, `deploy_arena_strategy`, `withdraw_arena_strategy`) are `destructiveHint: true` with a leading ⚠️ warning in their description — confirm with the user before calling them. The server's `instructions` describe Milo as both a stock research product (analyst ratings, insider/congress/8-K events, fundamentals, earnings) and an autonomous trading-agent product (crypto on Solana + brokered US equities); see `docs/mcp.md`.
+
+Synchronous research tools — `get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events` — mirror `GET /api/v1/research/*` (API key only, no userId; `readOnlyHint: true`; ticker validated, `days`/`limit` clamped; text summary + `structuredContent`). FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) appear only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
 
 ## Wallet & Deposits
 
@@ -1155,7 +1161,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/conversations \
 **Agent types:**
 | Agent | ID | Purpose |
 |-------|----|---------|
-| Market Analyst | `market-analyst` | Market analysis, token research, sentiment |
+| Market Analyst | `market-analyst` | Equities research (analyst ratings, insider/congress/8-K, fundamentals, earnings) + token research, sentiment |
 | Auto Trader | `auto-trader` | Trading strategy discussion |
 | Game Agent | `milo-game-agent` | Gamified trading experience |
 
@@ -1387,6 +1393,23 @@ Schema validation failures also return `400 bad_request`, with `error.details.va
     }
   }
 }
+```
+
+## Stock Research (synchronous)
+
+Read-only, market-level reads under `GET /api/v1/research/*` — an API key but no `userId`/`walletId`. `ticker` is 1-6 chars (letters/digits, `.`/`-`), case-insensitive; invalid tickers return `400`. `limit` max 100, `days` max 365 (out of range → `400`). 60 requests/min per API key. Every response carries `meta.source` (what the data is + how fresh) and `meta.coverage` where relevant. Disclosures, not recommendations.
+
+- `GET /api/v1/research/digest?ticker=NVDA` — one-call 90-day digest: insider Form 4 purchases, congressional trades, 8-K filings (counts, notable rows, filing links). Start here.
+- `GET /api/v1/research/insider-transactions?ticker=NVDA&days=90&limit=50` — SEC Form 4 insider open-market **purchases** (code `P`) for the ticker; each row has `filerName`, `filerRole`, `shares`, `price`, `valueUsd`, `filedAt`, `filingUrl` (EDGAR). Coverage is Milo's curated US-equity universe only — `meta.coverage.tracked` / `meta.coverage.tickers`; an empty result for an untracked ticker means "not tracked", not "no insider activity".
+- `GET /api/v1/research/insider-buys?days=30&minValueUsd=100000&limit=50` — notable insider purchases across the tracked universe.
+- `GET /api/v1/research/congress-trades?ticker=NVDA&days=90&limit=50` — congressional PTR disclosures (`chamber`, `memberName`, `type`, `amountBucket`, `amountMinUsd`, `transactionDate`, `disclosureDate`, `link`); omit `ticker` for market-wide. PTRs carry amount ranges (never exact amounts) and lag the trade by up to 30-45 days; polled every 1-4h.
+- `GET /api/v1/research/8k-events?ticker=NVDA&days=90&limit=50` — SEC 8-K filings with `items` (codes) and `itemSummaries` (titles), `link`/`finalLink`; polled ~every 30 min.
+- Licensed (FMP-derived) routes — `analyst-consensus`, `fundamentals`, `earnings-timeline`, `news` (`limit` max 12), `peers` — are mounted only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off → `404`); `503 service_unavailable` when `FMP_API_KEY` is missing; `404` when the provider has no data.
+- Any research data-layer failure returns `503 service_unavailable` with a generic message.
+
+```bash
+curl "{{BASE_URL}}/api/v1/research/digest?ticker=NVDA" \
+  -H "X-API-Key: $API_KEY"
 ```
 
 ## Signal Feeds & Decision Ledger
