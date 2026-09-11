@@ -508,7 +508,7 @@ Coverage caveats (stated in every response):
   US-equity universe — `meta.coverage.tickers` lists it and `meta.coverage.tracked` says whether
   the requested ticker is in it. An empty result for an untracked ticker means "not tracked", not
   "no insider activity". Coverage is issuer-aware: share classes of one SEC registrant (GOOG/GOOGL,
-  BRK.A/BRK.B) share a CIK, filings are stored under one canonical ticker
+  BRK.A/BRK.B) share a CIK and resolve to one issuer label
   (`meta.coverage.canonicalTicker` — derived from what ingestion actually did: the ticker of the
   issuer's persisted rows, else the pick over the effective polling universe, e.g. `GOOGL` for a
   `GOOG` query, computed from public coverage membership and never from which ticker rows are
