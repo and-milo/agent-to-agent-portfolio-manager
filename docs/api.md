@@ -509,11 +509,10 @@ Coverage caveats (stated in every response):
   the requested ticker is in it. An empty result for an untracked ticker means "not tracked", not
   "no insider activity". Coverage is issuer-aware: share classes of one SEC registrant (GOOG/GOOGL,
   BRK.A/BRK.B) share a CIK and resolve to one issuer label
-  (`meta.coverage.canonicalTicker` — derived from what ingestion actually did: the ticker of the
-  issuer's persisted rows, else the pick over the effective polling universe, e.g. `GOOGL` for a
-  `GOOG` query, computed from public coverage membership and never from which ticker rows are
-  stored under; `meta.coverage.aliases` lists the issuer's tickers and
-  `meta.coverage.aliases` the issuer's tickers) and a query for any alias returns the same rows with
+  (`meta.coverage.canonicalTicker` — the issuer's public label, computed from public coverage
+  membership else the SEC directory, e.g. `GOOGL` for a `GOOG` query. It is not a claim about
+  which ticker the returned rows carry: historical rows keep whatever they were ingested under.
+  `meta.coverage.aliases` lists the issuer's tickers) and a query for any alias returns the same rows with
   `tracked: true` when the canonical ticker is covered. The digest reports the same under
   `insider.canonicalTicker`.
 - Congressional PTRs are market-wide, polled every 1-4h, disclose amount **ranges** (never exact
