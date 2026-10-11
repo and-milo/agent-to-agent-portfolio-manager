@@ -193,6 +193,7 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
 
 # Conversations with Milo AI
 ./dist/milo create-conversation --message "Analyze SOL price action" --agent-type market-analyst
+./dist/milo create-conversation --message "What are BTC funding and open interest on Hyperliquid, and the Kalshi odds for the October Fed decision?"
 ./dist/milo get-messages --conversation-id <uuid>
 
 # Send tokens — funded from --wallet-id (defaults to config.wallet_id).
