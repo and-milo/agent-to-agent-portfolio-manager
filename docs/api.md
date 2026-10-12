@@ -12,11 +12,11 @@ Need an API key? [Contact us on Discord](https://discord.com/invite/join-milo)
 
 All endpoints (except signup) require one of:
 
-- `X-API-Key: mk_live_…` — a partner API key (full access to the key owner's data).
+- `X-API-Key: sk_live_…` — a partner API key (full access to the key owner's data).
 - `Authorization: Bearer mat_…` — an MCP OAuth 2.1 access token obtained through the OAuth flow described in `docs/mcp.md`. The token is bound to one user and a set of scopes; each route requires a scope (`profile`, `portfolio:read`, `chat`, `strategies:write`, `trade`, `transfer`; research and signal-feed reads need any valid token). Strategy create/update need `strategies:write`; strategy **sync** and delete need `trade` (sync re-applies the strategy onto the live account's settings). Conversation routes need `chat`, and the agent behind a conversation only gets the order/swap/position tools if the token also carries `trade`, the send-tokens tool with `transfer`, and strategy create/edit tools with `strategies:write`. A token without the needed scope gets `403` with `WWW-Authenticate: Bearer error="insufficient_scope", scope="…"`; an invalid or expired token gets `401` with `WWW-Authenticate: Bearer error="invalid_token", resource_metadata="…"`. Refresh with `POST /oauth/token` (`grant_type=refresh_token`).
 
 ```bash
-curl -H "X-API-Key: mk_live_..." https://partners.andmilo.com/api/v1/users/{userId}/positions
+curl -H "X-API-Key: sk_live_..." https://partners.andmilo.com/api/v1/users/{userId}/positions
 curl -H "Authorization: Bearer mat_..." https://partners.andmilo.com/api/v1/users/{userId}/positions
 ```
 
@@ -47,7 +47,7 @@ Notes:
 - Use `Mcp-Session-Id` for sessioned requests after initialization.
 - `Accept` should include `application/json` and `text/event-stream` for POST.
 - `POST /mcp` initialize accepts optional `X-API-Key` **or** `Authorization: Bearer mat_…` (OAuth 2.1; the bearer must then be sent on every request).
-- If omitted, the session starts unauthenticated: signup/public tools work, `tools/list` works, and the first `tools/call` returns `401` with a `WWW-Authenticate` challenge pointing at `/.well-known/oauth-protected-resource/mcp` so OAuth-capable clients (Claude, ChatGPT, Inspector) connect; the session is then upgraded in place. API-key sessions keep working exactly as before.
+- If omitted, the session starts unauthenticated: signup/public tools work, `tools/list` works, and the first protected `tools/call` (anything beyond the signup/public tools) returns `401` with a `WWW-Authenticate` challenge pointing at `/.well-known/oauth-protected-resource/mcp` so OAuth-capable clients (Claude, ChatGPT, Inspector) connect; the session is then upgraded in place. API-key sessions keep working exactly as before.
 - OAuth sessions only see tools covered by the granted scopes (`profile`, `portfolio:read`, `chat`, `strategies:write`; `trade`/`transfer` are never granted to directory clients — `sync_strategy` is a `trade` tool) and `userId` arguments default to the signed-in user.
 - After an anonymous session runs `signup`, the session is bound to the returned API key in place: the next `get_me` (or any protected tool) on that same session works without re-initializing. Clients that open a new MCP session per tool call (most hosted connectors) must send the returned key as `X-API-Key` on every request.
 - MCP tools that forward paginated endpoints enforce `page <= 100` and `pageSize <= 100`.
@@ -56,7 +56,7 @@ Notes:
 - If a session expires, sessioned calls return invalid-session errors and the client should re-initialize.
 - Tools carry a `title` and MCP annotations: read-only tools are `readOnlyHint: true`; money-moving/irreversible tools, state-replacing tools (`sync_strategy`, `update_strategy`, `pause_order`) and the conversation writes (`create_conversation`, `send_message` — the agent can update autotrade settings or close positions when asked) are `destructiveHint: true` with a leading `⚠️` warning in the description. Only signup, `create_strategy` and `claim_quest` are additive writes. Full list in `docs/mcp.md`.
 - The server's `instructions` describe Milo as both a stock research product (analyst ratings, insider/congress/8-K events, fundamentals, earnings) and an autonomous trading-agent product (crypto on Solana + brokered US equities).
-- Synchronous research tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) mirror the `/api/v1/research/*` routes: market-level reads (API key only, no userId), `readOnlyHint: true`, ticker validated (1-6 chars), `days`/`limit` clamped to 365/100, a short text summary, the same JSON serialized as a second text block (for clients that ignore `structuredContent`), and `structuredContent`. The FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) are registered only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
+- Synchronous research tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) mirror the `/api/v1/research/*` routes: market-level reads (any credential (API key or OAuth bearer, no scope needed), no userId), `readOnlyHint: true`, ticker validated (1-6 chars), `days`/`limit` clamped to 365/100, a short text summary, the same JSON serialized as a second text block (for clients that ignore `structuredContent`), and `structuredContent`. The FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) are registered only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
 
 Client setup examples (OpenAI Codex + Claude Desktop): see `docs/mcp.md`.
 
@@ -237,7 +237,7 @@ Pass `data` and `message` exactly as returned by step 1.
         "brokerage": null
       }
     ],
-    "apiKey": "mk_live_..."
+    "apiKey": "sk_live_..."
   }
 }
 ```

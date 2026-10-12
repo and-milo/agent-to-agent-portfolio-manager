@@ -51,7 +51,7 @@ test('retries conversation write with X-PAYMENT when overage payment is enabled'
   try {
     const client = new PartnerApiClient({
       baseUrl: 'https://partners.andmilo.com',
-      apiKey: 'mk_live_test',
+      apiKey: 'sk_live_test',
     });
 
     const response = await client.createConversation(
@@ -104,7 +104,7 @@ test('does not retry overage when payment mode is not enabled', async () => {
   try {
     const client = new PartnerApiClient({
       baseUrl: 'https://partners.andmilo.com',
-      apiKey: 'mk_live_test',
+      apiKey: 'sk_live_test',
     });
 
     await assert.rejects(
@@ -148,7 +148,7 @@ test('uses 402 response headers as fallback for payment requirements', async () 
   try {
     const client = new PartnerApiClient({
       baseUrl: 'https://partners.andmilo.com',
-      apiKey: 'mk_live_test',
+      apiKey: 'sk_live_test',
     });
 
     const response = await client.sendMessage(
@@ -201,7 +201,7 @@ test('fails fast when 402 response omits payment requirements', async () => {
   try {
     const client = new PartnerApiClient({
       baseUrl: 'https://partners.andmilo.com',
-      apiKey: 'mk_live_test',
+      apiKey: 'sk_live_test',
     });
 
     await assert.rejects(
@@ -246,7 +246,7 @@ test('fails when overage payment is enabled without tx signature', async () => {
   try {
     const client = new PartnerApiClient({
       baseUrl: 'https://partners.andmilo.com',
-      apiKey: 'mk_live_test',
+      apiKey: 'sk_live_test',
     });
 
     await assert.rejects(
@@ -276,7 +276,7 @@ test('research reads hit /api/v1/research/* with the API key and only the given 
   try {
     const client = new PartnerApiClient({
       baseUrl: 'https://partners.andmilo.com',
-      apiKey: 'mk_live_test',
+      apiKey: 'sk_live_test',
     });
 
     await client.getStockResearchDigest('NVDA');
@@ -299,7 +299,7 @@ test('research reads hit /api/v1/research/* with the API key and only the given 
     );
     for (const call of calls) {
       assert.equal(call.init?.method, 'GET');
-      assert.equal(getHeader(call.init?.headers, 'X-API-Key'), 'mk_live_test');
+      assert.equal(getHeader(call.init?.headers, 'X-API-Key'), 'sk_live_test');
     }
   } finally {
     globalThis.fetch = originalFetch;

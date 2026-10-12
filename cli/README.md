@@ -23,7 +23,7 @@ The same partner-api server exposes MCP on `/mcp` (Streamable HTTP).
 MCP tools are annotated read-only vs destructive: money-moving/irreversible tools, state-replacing tools (`sync_strategy`, `update_strategy`, `pause_order`) and the conversation writes (`create_conversation`, `send_message` — the agent can update autotrade settings or close positions when asked) carry `destructiveHint: true` and a ⚠️ warning in the description; only signup, `create_strategy` and `claim_quest` are additive writes. The matching CLI commands (`pause-order`, `update-strategy`, `sync-strategy`, `create-conversation`, `send-message`) carry the same ⚠️ in their help text — confirm before running them; see `docs/mcp.md`.  
 This CLI continues to use the REST endpoints directly.
 
-Research endpoints (`GET /api/v1/research/*`, API key only, no user id) are available over REST, as synchronous MCP tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) and as the CLI commands under "Stock research" below.
+Research endpoints (`GET /api/v1/research/*`, API key or OAuth bearer, no user id) are available over REST, as synchronous MCP tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) and as the CLI commands under "Stock research" below.
 
 ## Authentication
 
@@ -97,7 +97,7 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `diary-logs` | Get auto-trade diary logs |
 | `config` | Show or update `~/.milo/config.json` |
 
-### Stock research (API key only, no user id)
+### Stock research (API key or OAuth bearer, no user id)
 
 | Command | Description |
 |---------|-------------|

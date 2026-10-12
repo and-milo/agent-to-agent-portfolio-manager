@@ -122,7 +122,7 @@ That's it — Milo is now managing your portfolio. Read on for the full feature 
 - **Quests & Bones** — Complete quests (event-driven tasks like trades, signups) to earn bones (reward points). Check quests regularly and claim bones for completed quests.
 - **AI conversations** — Chat with Milo's market analyst, auto-trader, or game agent. Async processing with polling.
 - **Portfolio data** — Holdings, transactions, executed transactions, diary logs.
-- **Stock research (synchronous)** — `GET /api/v1/research/*`: SEC Form 4 insider purchases, congressional PTR trades, SEC 8-K events and a one-call digest per ticker. API key only, no userId. See "Stock Research (synchronous)".
+- **Stock research (synchronous)** — `GET /api/v1/research/*`: SEC Form 4 insider purchases, congressional PTR trades, SEC 8-K events and a one-call digest per ticker. any credential (API key or OAuth bearer, no scope needed), no userId. See "Stock Research (synchronous)".
 
 ## Quick Start
 
@@ -141,7 +141,7 @@ After signup, persist credentials locally so they survive across sessions:
 ```json
 // ~/.milo/config.json
 {
-  "api_key": "mk_live_...",
+  "api_key": "sk_live_...",
   "user_id": "uuid",
   "wallet_id": "uuid",
   "wallet_address": "7xKXtg...",
@@ -164,13 +164,13 @@ The partner API server exposes MCP on the same host at `/mcp` using Streamable H
 - `GET /mcp` for SSE stream
 - `DELETE /mcp` for session termination
 
-`POST /mcp` initialize accepts optional `X-API-Key`, or an OAuth 2.1 bearer token (`Authorization: Bearer mat_…`, sent on every request). Without either, the MCP session starts unauthenticated: signup/public tools and `tools/list` work, and the first `tools/call` returns `401` with `WWW-Authenticate: Bearer … resource_metadata="{{BASE_URL}}/.well-known/oauth-protected-resource/mcp", scope="profile portfolio:read chat strategies:write offline_access"` — OAuth-capable clients (Claude, ChatGPT, MCP Inspector) then run discovery (`/.well-known/oauth-authorization-server`), register (RFC 7591 or a Client ID Metadata Document URL), send the user to the consent page (`/oauth/consent`, Solana wallet sign-in) and resume on the same session. OAuth sessions only see tools covered by the granted scopes (never `trade`/`transfer` for directory clients; `sync_strategy` is a `trade` tool because it re-applies a strategy onto the live account, and conversation agents only get order/swap/position tools with `trade`, send-tokens with `transfer`, strategy create/edit with `strategies:write`) and `userId` arguments default to the signed-in user; API-key sessions are unchanged. After an anonymous session runs `signup`, it is bound to the returned key in place and the next protected call on that same session works without re-initializing; clients that open a new MCP session per tool call (most hosted connectors) must send the returned key as `X-API-Key` on every request. Request throttling and session-capacity protections are enforced, so initialize may return `429` (authenticated API keys / OAuth grants get a much larger initialize allowance than anonymous per-IP sessions). On `429`, respect `Retry-After` and retry after the indicated delay. Sessions can also expire, so re-initialize after invalid-session errors.
+`POST /mcp` initialize accepts optional `X-API-Key`, or an OAuth 2.1 bearer token (`Authorization: Bearer mat_…`, sent on every request). Without either, the MCP session starts unauthenticated: signup/public tools and `tools/list` work, and the first protected `tools/call` (anything beyond the signup/public tools) returns `401` with `WWW-Authenticate: Bearer … resource_metadata="{{BASE_URL}}/.well-known/oauth-protected-resource/mcp", scope="profile portfolio:read chat strategies:write offline_access"` — OAuth-capable clients (Claude, ChatGPT, MCP Inspector) then run discovery (`/.well-known/oauth-authorization-server`), register (RFC 7591 or a Client ID Metadata Document URL), send the user to the consent page (`/oauth/consent`, Solana wallet sign-in) and resume on the same session. OAuth sessions only see tools covered by the granted scopes (never `trade`/`transfer` for directory clients; `sync_strategy` is a `trade` tool because it re-applies a strategy onto the live account, and conversation agents only get order/swap/position tools with `trade`, send-tokens with `transfer`, strategy create/edit with `strategies:write`) and `userId` arguments default to the signed-in user; API-key sessions are unchanged. After an anonymous session runs `signup`, it is bound to the returned key in place and the next protected call on that same session works without re-initializing; clients that open a new MCP session per tool call (most hosted connectors) must send the returned key as `X-API-Key` on every request. Request throttling and session-capacity protections are enforced, so initialize may return `429` (authenticated API keys / OAuth grants get a much larger initialize allowance than anonymous per-IP sessions). On `429`, respect `Retry-After` and retry after the indicated delay. Sessions can also expire, so re-initialize after invalid-session errors.
 
 For sessioned requests after initialize, send `Mcp-Session-Id`.
 
 MCP tools carry a `title` and MCP annotations. Read-only tools are `readOnlyHint: true`. Money-moving or irreversible tools (`close_position`, `close_all_positions`, `create_order`, `activate_order`, `delete_order`, `send_tokens`, `update_autotrade_settings`, `update_account_autotrade_settings`, `delete_strategy`, `deploy_arena_strategy`, `withdraw_arena_strategy`), state-replacing tools (`sync_strategy` replaces the live account's allocation/instructions, `update_strategy` overwrites saved fields, `pause_order` can disable an active stop-loss) and the conversation writes (`create_conversation`, `send_message` — the answering agent can update autotrade settings or close positions when the message asks for it) are `destructiveHint: true` with a leading ⚠️ warning in their description — confirm with the user before calling them. Only `prepare_signup_message`, `signup`, `create_strategy` and `claim_quest` are additive (`destructiveHint: false`) writes. The server's `instructions` describe Milo as both a stock research product (analyst ratings, insider/congress/8-K events, fundamentals, earnings) and an autonomous trading-agent product (crypto on Solana + brokered US equities); see `docs/mcp.md`.
 
-Synchronous research tools — `get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events` — mirror `GET /api/v1/research/*` (API key only, no userId; `readOnlyHint: true`; ticker validated, `days`/`limit` clamped; a text summary, the same JSON serialized as a second text block for clients that ignore `structuredContent`, and `structuredContent`). FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) appear only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
+Synchronous research tools — `get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events` — mirror `GET /api/v1/research/*` (any credential (API key or OAuth bearer, no scope needed), no userId; `readOnlyHint: true`; ticker validated, `days`/`limit` clamped; a text summary, the same JSON serialized as a second text block for clients that ignore `structuredContent`, and `structuredContent`). FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) appear only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
 
 ## Wallet & Deposits
 
@@ -536,7 +536,7 @@ curl -X POST {{BASE_URL}}/api/v1/users \
       { "id": "uuid", "address": "<address>", "chain": "solana", "type": "signup" },
       { "id": "uuid", "address": "<address>", "chain": "solana", "type": "milo" }
     ],
-    "apiKey": "mk_live_..."
+    "apiKey": "sk_live_..."
   }
 }
 ```
@@ -1399,7 +1399,7 @@ Schema validation failures also return `400 bad_request`, with `error.details.va
 
 ## Stock Research (synchronous)
 
-Read-only, market-level reads under `GET /api/v1/research/*` — an API key but no `userId`/`walletId`. `ticker` is 1-6 chars (letters/digits, `.`/`-`), case-insensitive; invalid tickers return `400`. `limit` max 100, `days` max 365 (out of range → `400`). 60 requests/min per API key. Every response carries `meta.source` (what the data is + how fresh) and `meta.coverage` where relevant. Disclosures, not recommendations.
+Read-only, market-level reads under `GET /api/v1/research/*` — any credential (API key or OAuth bearer, no scope needed) but no `userId`/`walletId`. `ticker` is 1-6 chars (letters/digits, `.`/`-`), case-insensitive; invalid tickers return `400`. `limit` max 100, `days` max 365 (out of range → `400`). 60 requests/min per API key. Every response carries `meta.source` (what the data is + how fresh) and `meta.coverage` where relevant. Disclosures, not recommendations.
 
 - `GET /api/v1/research/digest?ticker=NVDA` — one-call 90-day digest: insider Form 4 purchases, congressional trades, 8-K filings (counts, notable rows, filing links). Start here.
 - `GET /api/v1/research/insider-transactions?ticker=NVDA&days=90&limit=50` — SEC Form 4 insider open-market **purchases** (code `P`) for the ticker; each row has `filerName`, `filerRole`, `shares`, `price`, `valueUsd`, `filedAt`, `filingUrl` (EDGAR). Coverage is Milo's tracked US-equity universe only (in production the S&P 500 plus its tokenized names; `meta.coverage.tickers` is authoritative) — `meta.coverage.tracked` / `meta.coverage.tickers`; an empty result for an untracked ticker means "not tracked", not "no insider activity". Coverage is issuer-aware: share classes of one registrant (GOOG/GOOGL) share a CIK, filings are stored under `meta.coverage.canonicalTicker` (the issuer's public label, computed from public coverage membership — GOOGL for a GOOG query; `meta.coverage.aliases` the issuer's tickers) and any alias returns the same rows with `tracked: true` when the canonical ticker is covered (the digest mirrors this as `insider.canonicalTicker`).
