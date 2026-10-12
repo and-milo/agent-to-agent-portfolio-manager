@@ -614,8 +614,9 @@ newer small one. `sec8k.latest` is the 5 most recent filings.
 When off these routes return `404 not_found`; when on but `FMP_API_KEY` is absent they return
 `503 service_unavailable` with a clear message; when the upstream provider fails (timeout, HTTP
 error, network, or an FMP plan/limit notice — plaintext or a JSON `{"Error Message": …}` envelope) they return `503 provider_unavailable` — transient, retry after a short delay; a
-ticker the provider answered for but has no data on returns `404 not_found`. A `404` on these routes
-therefore always means "no data", never an outage.**
+ticker the provider answered for but has no data on returns `404 not_found`. With the routes
+enabled, a `404` therefore means "no data", never an outage; with them disabled every request
+returns `404`, so a `404` on every ticker means the feature is off.**
 
 | Route                                    | Query                        | Returns                                                                        |
 | ---------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------ |

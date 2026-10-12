@@ -4,6 +4,8 @@ import {
   COMMANDS,
   parseModelVersionFlag,
   parseSourceFamilyFlag,
+  parseFundingAmountSolFlag,
+  parseTradingAccountIdFlag,
   parseResearchTicker,
   validateCreateOrderDependants,
   validateMinValueUsdFlag,
@@ -225,4 +227,53 @@ test('create-strategy and update-strategy forward sourceFamily', async () => {
   assert.equal((calls[0][1][1] as any).sourceFamily, 'congress-ptr');
   assert.equal((calls[1][1][2] as any).sourceFamily, null);
   assert.ok(!('sourceFamily' in (calls[2][1][2] as any)));
+});
+
+test('a bare --ticker is a missing ticker, not the ticker TRUE', () => {
+  assert.throws(() => parseResearchTicker('true', true), /Missing required flag --ticker/);
+  assert.throws(() => parseResearchTicker('true', false), /Missing required flag --ticker/);
+  assert.equal(parseResearchTicker('nvda', true), 'NVDA');
+});
+
+test('--funding-amount-sol and --trading-account-id validate their values', () => {
+  assert.equal(parseFundingAmountSolFlag(undefined), undefined);
+  assert.equal(parseFundingAmountSolFlag('2.5'), 2.5);
+  for (const bad of ['0.5', 'abc', '', 'true']) {
+    assert.throws(() => parseFundingAmountSolFlag(bad), /--funding-amount-sol/);
+  }
+  assert.equal(parseTradingAccountIdFlag(undefined), undefined);
+  assert.equal(parseTradingAccountIdFlag(' acct-1 '), 'acct-1');
+  assert.throws(() => parseTradingAccountIdFlag('true'), /--trading-account-id/);
+});
+
+test('deploy-arena forwards fundingAmountSol; settings commands route by trading account', async () => {
+  const calls: Array<[string, unknown[]]> = [];
+  const client = new Proxy(
+    {},
+    {
+      get:
+        (_t, method: string) =>
+        (...args: unknown[]) => {
+          calls.push([method, args]);
+          return Promise.resolve({ data: {} });
+        },
+    },
+  ) as any;
+  const run = (name: string, flags: Record<string, string | undefined>, config: any = {}) =>
+    COMMANDS.find((c) => c.name === name)!.handler(flags, client, config);
+
+  await run('deploy-arena', { 'user-id': 'u1', 'strategy-id': 's1', 'funding-amount-sol': '2.5' });
+  assert.deepEqual(calls.at(-1), ['deployArenaStrategy', ['u1', { strategyId: 's1', fundingAmountSol: 2.5 }]]);
+  await run('deploy-arena', { 'user-id': 'u1', 'strategy-id': 's1' });
+  assert.deepEqual(calls.at(-1), ['deployArenaStrategy', ['u1', { strategyId: 's1' }]]);
+
+  await run('get-settings', { 'trading-account-id': 'acct-2' });
+  assert.deepEqual(calls.at(-1), ['getAccountAutoTradeSettings', ['acct-2']]);
+  await run('update-settings', { 'trading-account-id': 'acct-2', 'is-active': 'false' });
+  assert.deepEqual(calls.at(-1), [
+    'updateAccountAutoTradeSettings',
+    ['acct-2', { isActive: false }],
+  ]);
+  await run('get-settings', {}, { user_id: 'u1' });
+  assert.deepEqual(calls.at(-1), ['getAutoTradeSettings', ['u1']]);
 });

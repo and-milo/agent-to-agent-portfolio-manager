@@ -121,8 +121,10 @@ const RESEARCH_NEWS_MAX_LIMIT = 12;
 export function parseResearchTicker(value: string | undefined, required: true): string;
 export function parseResearchTicker(value: string | undefined, required: false): string | undefined;
 export function parseResearchTicker(value: string | undefined, required: boolean): string | undefined {
-  if (value === undefined || value.trim() === '') {
-    if (required) throw new Error('Missing required flag --ticker');
+  // A bare `--ticker` reaches here as the parser's valueless-flag sentinel
+  // 'true', which would otherwise pass as the ticker TRUE.
+  if (value === undefined || value.trim() === '' || value === 'true') {
+    if (required || value === 'true') throw new Error('Missing required flag --ticker');
     return undefined;
   }
   const ticker = value.trim().toUpperCase();
@@ -186,6 +188,24 @@ export function parseModelVersionFlag(
     );
   }
   return trimmed;
+}
+
+/** --trading-account-id: a non-empty id, or undefined when the flag is absent. */
+export function parseTradingAccountIdFlag(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === 'true') throw new Error('Missing value for --trading-account-id');
+  return trimmed;
+}
+
+/** --funding-amount-sol: a finite number >= 1 (partner-api arena deploy). */
+export function parseFundingAmountSolFlag(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const n = Number(value);
+  if (value.trim() === '' || value === 'true' || !Number.isFinite(n) || n < 1) {
+    throw new Error('--funding-amount-sol must be a number >= 1');
+  }
+  return n;
 }
 
 /** Signal-feed keys a strategy can opt into (partner-api SOURCE_FAMILY_FEEDS). */
@@ -557,8 +577,15 @@ export const COMMANDS: CommandDef[] = [
     description: 'Get current auto-trade configuration',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
+      {
+        name: 'trading-account-id',
+        description:
+          'Trading account to read (see list-trading-accounts). Omit for the default account.',
+      },
     ],
     handler: async (flags, client, config) => {
+      const accountId = parseTradingAccountIdFlag(flags['trading-account-id']);
+      if (accountId) return client.getAccountAutoTradeSettings(accountId);
       const userId = requireFlag(flags, 'user-id', config.user_id);
       return client.getAutoTradeSettings(userId);
     },
@@ -569,6 +596,11 @@ export const COMMANDS: CommandDef[] = [
     description: 'Update auto-trade configuration',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
+      {
+        name: 'trading-account-id',
+        description:
+          'Trading account to update (see list-trading-accounts). Omit for the default account.',
+      },
       { name: 'is-active', description: 'Enable (true) or disable (false) auto-trading' },
       { name: 'risk-tolerance', description: 'conservative, balanced, or degen' },
       { name: 'strategy', description: 'VALUE INVESTOR, SWING TRADER, SCALPER, or CUSTOM' },
@@ -592,7 +624,6 @@ export const COMMANDS: CommandDef[] = [
       },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
       const body: Record<string, unknown> = {};
       if (flags['is-active'] !== undefined) body.isActive = flags['is-active'] === 'true';
       if (flags['risk-tolerance']) body.riskTolerance = flags['risk-tolerance'];
@@ -617,7 +648,9 @@ export const COMMANDS: CommandDef[] = [
       if (Object.keys(body).length === 0) {
         throw new Error('At least one setting flag must be provided');
       }
-      return client.updateAutoTradeSettings(userId, body);
+      const accountId = parseTradingAccountIdFlag(flags['trading-account-id']);
+      if (accountId) return client.updateAccountAutoTradeSettings(accountId, body);
+      return client.updateAutoTradeSettings(requireFlag(flags, 'user-id', config.user_id), body);
     },
   },
 
@@ -901,11 +934,19 @@ export const COMMANDS: CommandDef[] = [
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
       { name: 'strategy-id', description: 'Strategy ID to deploy', required: true },
+      {
+        name: 'funding-amount-sol',
+        description: 'SOL to fund the arena deployment with (min 1; default 1 server-side)',
+      },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
       const strategyId = requireFlag(flags, 'strategy-id');
-      return client.deployArenaStrategy(userId, { strategyId });
+      const fundingAmountSol = parseFundingAmountSolFlag(flags['funding-amount-sol']);
+      return client.deployArenaStrategy(userId, {
+        strategyId,
+        ...(fundingAmountSol !== undefined ? { fundingAmountSol } : {}),
+      });
     },
   },
 

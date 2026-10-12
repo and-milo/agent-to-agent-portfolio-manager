@@ -431,10 +431,13 @@ Run the [heartbeat protocol]({{BASE_URL}}/heartbeat.md) every 4+ hours to keep t
 
 ### Authentication
 
-All endpoints (except signup) require:
+All endpoints (except signup) require one of:
 ```
 X-API-Key: <api_key>
+Authorization: Bearer mat_<oauth_access_token>
 ```
+
+An API key has full access to its owner's data. An OAuth bearer is scope-checked per route (`profile`, `portfolio:read`, `chat`, `strategies:write`; `trade`/`transfer` are never granted to directory clients); like an API key, it only reaches its own user's data. Market-level research routes accept either credential with no scope.
 
 ### Me
 
@@ -1406,7 +1409,7 @@ Read-only, market-level reads under `GET /api/v1/research/*` — any credential 
 - `GET /api/v1/research/insider-buys?days=30&minValueUsd=100000&limit=50` — notable insider purchases across the tracked universe.
 - `GET /api/v1/research/congress-trades?ticker=NVDA&days=90&limit=50` — congressional PTR disclosures (`chamber`, `memberName`, `type`, `amountBucket`, `amountMinUsd`, `transactionDate`, `disclosureDate`, `link`); omit `ticker` for market-wide. PTRs carry amount ranges (never exact amounts) and lag the trade by up to 30-45 days; polled every 1-4h.
 - `GET /api/v1/research/8k-events?ticker=NVDA&days=90&limit=50` — SEC 8-K filings with `items` (codes) and `itemSummaries` (titles), `link`/`finalLink`; polled ~every 30 min.
-- Licensed (FMP-derived) routes — `analyst-consensus`, `fundamentals`, `earnings-timeline`, `news` (`limit` max 12), `peers` — are mounted only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off → `404`); `503 service_unavailable` when `FMP_API_KEY` is missing; `503 provider_unavailable` when the upstream provider failed (timeout / HTTP error / plan-limit notice, plaintext or JSON `Error Message` envelope — transient, retry shortly); `404 not_found` only when the provider answered and has no data for the ticker. A `404` never hides an outage.
+- Licensed (FMP-derived) routes — `analyst-consensus`, `fundamentals`, `earnings-timeline`, `news` (`limit` max 12), `peers` — are mounted only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off → `404`); `503 service_unavailable` when `FMP_API_KEY` is missing; `503 provider_unavailable` when the upstream provider failed (timeout / HTTP error / plan-limit notice, plaintext or JSON `Error Message` envelope — transient, retry shortly); `404 not_found` when the provider answered and has no data for the ticker. With the routes enabled a `404` never hides an outage; with them disabled every request returns `404`, so a `404` on every ticker means the feature is off.
 - Any research data-layer failure returns `503 service_unavailable` with a generic message. Treat every `503` on a research route as retryable and every `404` as "no data".
 - Digest statistics (`insider.count`/`totalValueUsd`, `congress.count`/`purchases`/`sales`, `sec8k.count`) are whole-window aggregates and `notable` rows are the top 5 by disclosed value across the whole 90-day window — never derived from a capped page.
 

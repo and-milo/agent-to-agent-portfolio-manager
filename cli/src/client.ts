@@ -437,6 +437,18 @@ export class PartnerApiClient {
     return this.request('PATCH', `/api/v1/users/${userId}/auto-trade-settings`, body);
   }
 
+  getAccountAutoTradeSettings(tradingAccountId: string) {
+    return this.request('GET', `/api/v1/trading-accounts/${tradingAccountId}/auto-trade-settings`);
+  }
+
+  updateAccountAutoTradeSettings(tradingAccountId: string, body: Record<string, unknown>) {
+    return this.request(
+      'PATCH',
+      `/api/v1/trading-accounts/${tradingAccountId}/auto-trade-settings`,
+      body,
+    );
+  }
+
   // ── Strategies ──────────────────────────────────────────────────
 
   listStrategies(
@@ -490,7 +502,7 @@ export class PartnerApiClient {
 
   // ── Arena ──────────────────────────────────────────────────────
 
-  deployArenaStrategy(userId: string, body: { strategyId: string }) {
+  deployArenaStrategy(userId: string, body: { strategyId: string; fundingAmountSol?: number }) {
     return this.request('POST', `/api/v1/users/${userId}/arena/deploy`, body);
   }
 

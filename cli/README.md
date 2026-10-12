@@ -75,15 +75,15 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `activate-order` | Activate a draft/paused order |
 | `delete-order` | Archive an order |
 | `send-tokens` | Send tokens from your Milo wallet |
-| `get-settings` | Get auto-trade configuration |
-| `update-settings` | Update auto-trade configuration |
+| `get-settings` | Get auto-trade configuration (`--trading-account-id` for a non-default account) |
+| `update-settings` | Update auto-trade configuration (`--trading-account-id` for a non-default account) |
 | `list-strategies` | List autotrade strategies |
 | `get-strategy` | Get strategy details |
 | `create-strategy` | Create a strategy (`--source-family` opts it into a signal feed; see `signal-feeds`) |
 | `update-strategy` | ⚠️ Update a strategy (passed fields overwrite saved values; affects a linked live account once re-synced; `--source-family null` opts out of a feed) |
 | `delete-strategy` | Delete a strategy |
 | `sync-strategy` | ⚠️ Re-sync settings with a linked strategy (replaces the live account's allocation/instructions) |
-| `deploy-arena` | Deploy a public strategy to the arena |
+| `deploy-arena` | Deploy a public strategy to the arena (`--funding-amount-sol`, min 1, default 1) |
 | `withdraw-arena` | Withdraw from the arena (transfers holdings back) |
 | `arena-leaderboard` | Get the arena leaderboard |
 | `list-quests` | List quests with progress and bones rewards (defaults to unlocked) |
