@@ -51,7 +51,7 @@ test('retries conversation write with X-PAYMENT when overage payment is enabled'
   try {
     const client = new PartnerApiClient({
       baseUrl: 'https://partners.andmilo.com',
-      apiKey: 'mk_live_test',
+      apiKey: 'sk_live_test',
     });
 
     const response = await client.createConversation(
@@ -104,7 +104,7 @@ test('does not retry overage when payment mode is not enabled', async () => {
   try {
     const client = new PartnerApiClient({
       baseUrl: 'https://partners.andmilo.com',
-      apiKey: 'mk_live_test',
+      apiKey: 'sk_live_test',
     });
 
     await assert.rejects(
@@ -148,7 +148,7 @@ test('uses 402 response headers as fallback for payment requirements', async () 
   try {
     const client = new PartnerApiClient({
       baseUrl: 'https://partners.andmilo.com',
-      apiKey: 'mk_live_test',
+      apiKey: 'sk_live_test',
     });
 
     const response = await client.sendMessage(
@@ -201,7 +201,7 @@ test('fails fast when 402 response omits payment requirements', async () => {
   try {
     const client = new PartnerApiClient({
       baseUrl: 'https://partners.andmilo.com',
-      apiKey: 'mk_live_test',
+      apiKey: 'sk_live_test',
     });
 
     await assert.rejects(
@@ -246,7 +246,7 @@ test('fails when overage payment is enabled without tx signature', async () => {
   try {
     const client = new PartnerApiClient({
       baseUrl: 'https://partners.andmilo.com',
-      apiKey: 'mk_live_test',
+      apiKey: 'sk_live_test',
     });
 
     await assert.rejects(
@@ -258,6 +258,75 @@ test('fails when overage payment is enabled without tx signature', async () => {
         ),
       /Missing payment tx signature/,
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('research reads hit /api/v1/research/* with the API key and only the given query params', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    calls.push({ url, init });
+    return jsonResponse({ data: { ticker: 'NVDA' } }, 200);
+  };
+
+  try {
+    const client = new PartnerApiClient({
+      baseUrl: 'https://partners.andmilo.com',
+      apiKey: 'sk_live_test',
+    });
+
+    await client.getStockResearchDigest('NVDA');
+    await client.getInsiderTransactions({ ticker: 'NVDA', days: '30' });
+    await client.getRecentInsiderBuys({ minValueUsd: '100000' });
+    await client.getCongressTrades();
+    await client.get8kEvents({ ticker: 'NVDA', limit: '5' });
+    await client.getStockNews({ ticker: 'NVDA', limit: '12' });
+
+    assert.deepEqual(
+      calls.map((c) => c.url),
+      [
+        'https://partners.andmilo.com/api/v1/research/digest?ticker=NVDA',
+        'https://partners.andmilo.com/api/v1/research/insider-transactions?ticker=NVDA&days=30',
+        'https://partners.andmilo.com/api/v1/research/insider-buys?minValueUsd=100000',
+        'https://partners.andmilo.com/api/v1/research/congress-trades',
+        'https://partners.andmilo.com/api/v1/research/8k-events?ticker=NVDA&limit=5',
+        'https://partners.andmilo.com/api/v1/research/news?ticker=NVDA&limit=12',
+      ],
+    );
+    for (const call of calls) {
+      assert.equal(call.init?.method, 'GET');
+      assert.equal(getHeader(call.init?.headers, 'X-API-Key'), 'sk_live_test');
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a 503 provider_unavailable on a licensed research route surfaces the API message and status', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    jsonResponse(
+      {
+        error: {
+          code: 'provider_unavailable',
+          message:
+            'Earnings timeline is temporarily unavailable (the upstream data provider did not respond). Please retry shortly.',
+        },
+      },
+      503,
+    );
+  try {
+    const client = new PartnerApiClient({ baseUrl: 'https://partners.andmilo.com', apiKey: 'k' });
+    await assert.rejects(client.getEarningsTimeline('NVDA'), (err: any) => {
+      assert.equal(err.status, 503);
+      assert.equal(err.body?.error?.code, 'provider_unavailable');
+      assert.match(err.message, /Partner API error \(503\): Earnings timeline is temporarily unavailable/);
+      return true;
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

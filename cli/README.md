@@ -21,8 +21,11 @@ The build produces `dist/milo` — a self-contained executable.
 ## MCP Endpoint
 
 The same partner-api server exposes MCP on `/mcp` (Streamable HTTP).  
-`POST /mcp` initialize accepts optional `X-API-Key`; without it, MCP is limited to signup/public tools until `signup` returns an API key. Throttling and session-capacity protections are enforced, so initialize can return `429`. Respect `Retry-After` before retrying and re-initialize after invalid-session errors.  
+`POST /mcp` initialize accepts optional `X-API-Key` or an OAuth 2.1 bearer token (`Authorization: Bearer mat_…`; discovery at `/.well-known/oauth-authorization-server`, consent with your Solana wallet). Without either, MCP is limited to signup/public tools and `tools/list` until `signup` returns an API key or the first protected `tools/call` (anything beyond the public signup tools) triggers the OAuth `401` challenge. The CLI itself keeps using API keys. The key `signup` returns is bound to that MCP session only: clients that open a new session per tool call must send it as `X-API-Key` on every request. Throttling and session-capacity protections are enforced (authenticated callers get a larger initialize allowance than anonymous per-IP sessions), so initialize can return `429`. Respect `Retry-After` before retrying and re-initialize after invalid-session errors.  
+MCP tools are annotated read-only vs destructive: money-moving/irreversible tools, state-replacing tools (`sync_strategy`, `update_strategy`, `pause_order`) and the conversation writes (`create_conversation`, `send_message` — the agent can update autotrade settings or close positions when asked) carry `destructiveHint: true` and a ⚠️ warning in the description; only signup, `create_strategy` and `claim_quest` are additive writes. The matching CLI commands (`pause-order`, `update-strategy`, `sync-strategy`, `create-conversation`, `send-message`) carry the same ⚠️ in their help text — confirm before running them; see `docs/mcp.md`.  
 This CLI continues to use the REST endpoints directly.
+
+Research endpoints (`GET /api/v1/research/*`, API key or OAuth bearer, no user id) are available over REST, as synchronous MCP tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) and as the CLI commands under "Stock research" below.
 
 ## Authentication
 
@@ -63,36 +66,57 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `transactions` | List wallet transactions |
 | `executed-transactions` | Get executed (order-linked) transactions |
 | `list-positions` | List investment positions with PnL |
+| `signal-feeds` | List registered catalyst signal feeds (rollout stage + gates) |
+| `decisions` | Decision ledger incl. shadow/gated decisions that never traded |
 | `close-position` | Close a position |
 | `close-all-positions` | Close all positions |
 | `create-order` | Create a buy/sell order with optional TP/SL |
 | `list-orders` | List orders with filters |
 | `get-order` | Get order details |
-| `pause-order` | Pause an active order |
+| `pause-order` | ⚠️ Pause an active order (pausing a stop-loss/take-profit leaves the position unprotected) |
 | `activate-order` | Activate a draft/paused order |
 | `delete-order` | Archive an order |
 | `send-tokens` | Send tokens from your Milo wallet |
-| `get-settings` | Get auto-trade configuration |
-| `update-settings` | Update auto-trade configuration |
+| `get-settings` | Get auto-trade configuration (`--trading-account-id` for a non-default account) |
+| `update-settings` | Update auto-trade configuration (`--trading-account-id` for a non-default account) |
 | `list-strategies` | List autotrade strategies |
 | `get-strategy` | Get strategy details |
-| `create-strategy` | Create a strategy |
-| `update-strategy` | Update a strategy |
+| `create-strategy` | Create a strategy (`--source-family` opts it into a signal feed; see `signal-feeds`) |
+| `update-strategy` | ⚠️ Update a strategy (passed fields overwrite saved values; affects a linked live account once re-synced; `--source-family null` opts out of a feed) |
 | `delete-strategy` | Delete a strategy |
-| `sync-strategy` | Re-sync settings with a linked strategy |
-| `deploy-arena` | Deploy a public strategy to the arena |
+| `sync-strategy` | ⚠️ Re-sync settings with a linked strategy (replaces the live account's allocation/instructions) |
+| `deploy-arena` | Deploy a public strategy to the arena (`--funding-amount-sol`, min 1, default 1) |
 | `withdraw-arena` | Withdraw from the arena (transfers holdings back) |
 | `arena-leaderboard` | Get the arena leaderboard |
 | `list-quests` | List quests with progress and bones rewards (defaults to unlocked) |
 | `claim-quest` | Claim bones (reward points) for a completed quest |
 | `bones-balance` | Get your bones (reward points) balance |
-| `create-conversation` | Start a conversation with Milo AI |
+| `create-conversation` | ⚠️ Start a conversation with Milo AI (the auto-trader agent may change settings / close positions when asked) |
 | `list-conversations` | List conversations |
 | `get-conversation` | Get conversation details |
-| `send-message` | Send a message to a conversation |
+| `send-message` | ⚠️ Send a message to a conversation (the auto-trader agent may change settings / close positions when asked) |
 | `get-messages` | Get messages (poll `processing` flag) |
 | `diary-logs` | Get auto-trade diary logs |
 | `config` | Show or update `~/.milo/config.json` |
+
+### Stock research (API key, no user id)
+
+The CLI authenticates with an API key (`--api-key` / `MILO_API_KEY`, sent as `X-API-Key`). The underlying REST routes and MCP tools also accept an OAuth bearer, but the CLI does not send one.
+
+| Command | Description |
+|---------|-------------|
+| `research-digest` | One-call 90-day disclosure digest for a ticker: insider Form 4 purchases, congressional trades, 8-K filings — whole-window counts/totals, top-5 notable rows, filing links |
+| `insider-transactions` | SEC Form 4 insider open-market purchases for a ticker (Milo's tracked universe only — check `meta.coverage.tracked`; `meta.coverage.tickers` lists exactly which tickers are polled) |
+| `insider-buys` | Notable insider purchases across Milo's tracked universe, optionally above `--min-value-usd` |
+| `congress-trades` | Congressional PTR disclosures for a ticker, or market-wide when `--ticker` is omitted |
+| `8k-events` | SEC 8-K material-event filings for a ticker with item codes and titles |
+| `analyst-consensus` | *(optional, licensed)* Analyst rating mix, price targets, recent grade actions |
+| `fundamentals` | *(optional, licensed)* Quarterly revenue / net income / free cash flow (12 quarters) |
+| `earnings-timeline` | *(optional, licensed)* Next scheduled report + up to 8 reported quarters with surprise % |
+| `stock-news` | *(optional, licensed)* Recent news with per-article sentiment (`--limit` max 12) |
+| `peers` | *(optional, licensed)* The company + up to 5 peers by market cap with TTM multiples/margins |
+
+The five *optional, licensed* commands are FMP-derived and only work against a server running with `MCP_LICENSED_RESEARCH_TOOLS=true` — otherwise they return `404 not_found`. On an enabled server: `503 service_unavailable` means `FMP_API_KEY` is missing, `503 provider_unavailable` means the upstream provider failed (transient — retry shortly), and `404 not_found` means the provider answered and has no data for that ticker. Every `503` on a research route is retryable; a `404` is not an outage.
 
 ## Guardrails and Throttling
 
@@ -122,6 +146,7 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
   - Use `--data-sources-json null` or `--asset-class-settings-json null` on update endpoints to clear saved values.
 - Some write-heavy commands are more likely to receive `429` during bursts (for example order creation, close-all positions, and conversation writes). Build retries with backoff.
 - On `429`, respect `Retry-After` and retry only after that delay.
+- Research commands validate `--ticker` (1-6 letters/digits, `.`/`-`; upper-cased), `--days` (1-365), `--limit` (1-100; `stock-news` 1-12) and `--min-value-usd` (>= 0) locally before calling the API, mirroring the server's `400 bad_request` rules.
 
 ## Examples
 
@@ -189,6 +214,18 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 ./dist/milo list-quests --unclaimed true
 ./dist/milo claim-quest --quest-id <uuid>
 ./dist/milo bones-balance
+
+# Stock research — synchronous disclosure reads (no user id needed)
+./dist/milo research-digest --ticker NVDA
+./dist/milo insider-transactions --ticker NVDA --days 90 --limit 50
+./dist/milo insider-buys --days 30 --min-value-usd 100000
+./dist/milo congress-trades                      # market-wide
+./dist/milo congress-trades --ticker NVDA --days 60
+./dist/milo 8k-events --ticker NVDA
+# Licensed (FMP-derived) — only on servers with MCP_LICENSED_RESEARCH_TOOLS=true
+./dist/milo analyst-consensus --ticker NVDA
+./dist/milo earnings-timeline --ticker NVDA
+./dist/milo stock-news --ticker NVDA --limit 12
 ```
 
 ## Development

@@ -295,6 +295,88 @@ export class PartnerApiClient {
     return this.request('POST', `/api/v1/users/${userId}/positions/close-all`);
   }
 
+  // ── Signal feeds & decisions ────────────────────────────────────
+
+  listSignalFeeds() {
+    return this.request('GET', '/api/v1/signal-feeds');
+  }
+
+  listDecisions(
+    userId: string,
+    opts?: { page?: string; pageSize?: string; action?: string; tradingAccountId?: string },
+  ) {
+    return this.request('GET', `/api/v1/users/${userId}/decisions`, undefined, {
+      page: opts?.page,
+      pageSize: opts?.pageSize,
+      action: opts?.action,
+      tradingAccountId: opts?.tradingAccountId,
+    });
+  }
+
+  // ── Research (market-level reads; API key only, no userId) ──────
+
+  getInsiderTransactions(opts: { ticker: string; days?: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/insider-transactions', undefined, {
+      ticker: opts.ticker,
+      days: opts.days,
+      limit: opts.limit,
+    });
+  }
+
+  getRecentInsiderBuys(opts?: { days?: string; minValueUsd?: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/insider-buys', undefined, {
+      days: opts?.days,
+      minValueUsd: opts?.minValueUsd,
+      limit: opts?.limit,
+    });
+  }
+
+  getCongressTrades(opts?: { ticker?: string; days?: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/congress-trades', undefined, {
+      ticker: opts?.ticker,
+      days: opts?.days,
+      limit: opts?.limit,
+    });
+  }
+
+  get8kEvents(opts: { ticker: string; days?: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/8k-events', undefined, {
+      ticker: opts.ticker,
+      days: opts.days,
+      limit: opts.limit,
+    });
+  }
+
+  getStockResearchDigest(ticker: string) {
+    return this.request('GET', '/api/v1/research/digest', undefined, { ticker });
+  }
+
+  // Licensed (FMP-derived) research — the server only mounts these routes
+  // when MCP_LICENSED_RESEARCH_TOOLS=true (404 otherwise).
+
+  getAnalystConsensus(ticker: string) {
+    return this.request('GET', '/api/v1/research/analyst-consensus', undefined, { ticker });
+  }
+
+  getStockFundamentals(ticker: string) {
+    return this.request('GET', '/api/v1/research/fundamentals', undefined, { ticker });
+  }
+
+  getEarningsTimeline(ticker: string) {
+    return this.request('GET', '/api/v1/research/earnings-timeline', undefined, { ticker });
+  }
+
+  getStockNews(opts: { ticker: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/news', undefined, {
+      ticker: opts.ticker,
+      limit: opts.limit,
+    });
+  }
+
+  getPeerComparison(ticker: string) {
+    return this.request('GET', '/api/v1/research/peers', undefined, { ticker });
+  }
+
   // ── Orders ──────────────────────────────────────────────────────
 
   createOrder(walletId: string, body: Record<string, unknown>) {
@@ -355,6 +437,18 @@ export class PartnerApiClient {
     return this.request('PATCH', `/api/v1/users/${userId}/auto-trade-settings`, body);
   }
 
+  getAccountAutoTradeSettings(tradingAccountId: string) {
+    return this.request('GET', `/api/v1/trading-accounts/${tradingAccountId}/auto-trade-settings`);
+  }
+
+  updateAccountAutoTradeSettings(tradingAccountId: string, body: Record<string, unknown>) {
+    return this.request(
+      'PATCH',
+      `/api/v1/trading-accounts/${tradingAccountId}/auto-trade-settings`,
+      body,
+    );
+  }
+
   // ── Strategies ──────────────────────────────────────────────────
 
   listStrategies(
@@ -408,7 +502,7 @@ export class PartnerApiClient {
 
   // ── Arena ──────────────────────────────────────────────────────
 
-  deployArenaStrategy(userId: string, body: { strategyId: string }) {
+  deployArenaStrategy(userId: string, body: { strategyId: string; fundingAmountSol?: number }) {
     return this.request('POST', `/api/v1/users/${userId}/arena/deploy`, body);
   }
 

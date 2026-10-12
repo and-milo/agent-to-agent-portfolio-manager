@@ -113,6 +113,47 @@ export function validatePagingFlags(page: string | undefined, pageSize: string |
   validateOptionalPositiveInt('page-size', pageSize, MAX_PAGE_SIZE_VALUE);
 }
 
+// Research (GET /api/v1/research/*) — mirrors the partner API's zod schemas:
+// ticker 1-6 chars (letters/digits, `.`/`-`), upper-cased; days 1-365;
+// limit 1-100 (news: 1-12); minValueUsd >= 0.
+const RESEARCH_TICKER_PATTERN = /^[A-Z][A-Z0-9.\-]{0,5}$/;
+const RESEARCH_MAX_DAYS = 365;
+const RESEARCH_MAX_LIMIT = 100;
+const RESEARCH_NEWS_MAX_LIMIT = 12;
+
+export function parseResearchTicker(value: string | undefined, required: true): string;
+export function parseResearchTicker(value: string | undefined, required: false): string | undefined;
+export function parseResearchTicker(value: string | undefined, required: boolean): string | undefined {
+  // A bare `--ticker` reaches here as the parser's valueless-flag sentinel
+  // 'true', which would otherwise pass as the ticker TRUE.
+  if (value === undefined || value.trim() === '' || value === 'true') {
+    if (required || value === 'true') throw new Error('Missing required flag --ticker');
+    return undefined;
+  }
+  const ticker = value.trim().toUpperCase();
+  if (!RESEARCH_TICKER_PATTERN.test(ticker)) {
+    throw new Error('--ticker must be 1-6 uppercase letters/digits (e.g. NVDA, BRK.B)');
+  }
+  return ticker;
+}
+
+export function validateResearchWindowFlags(
+  days: string | undefined,
+  limit: string | undefined,
+  maxLimit: number = RESEARCH_MAX_LIMIT,
+): void {
+  validateOptionalPositiveInt('days', days, RESEARCH_MAX_DAYS);
+  validateOptionalPositiveInt('limit', limit, maxLimit);
+}
+
+export function validateMinValueUsdFlag(value: string | undefined): void {
+  if (value === undefined) return;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error('--min-value-usd must be a number >= 0');
+  }
+}
+
 function parseConversationOverageAsset(value: string | undefined): ConversationOverageAsset {
   const normalized = (value ?? 'USDC').toUpperCase();
   if (normalized !== 'USDC' && normalized !== 'SOL') {
@@ -152,9 +193,58 @@ export function parseModelVersionFlag(
   return trimmed;
 }
 
+/** --trading-account-id: a non-empty id, or undefined when the flag is absent. */
+export function parseTradingAccountIdFlag(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === 'true') throw new Error('Missing value for --trading-account-id');
+  return trimmed;
+}
+
+/** --funding-amount-sol: a finite number >= 1 (partner-api arena deploy). */
+export function parseFundingAmountSolFlag(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const n = Number(value);
+  if (value.trim() === '' || value === 'true' || !Number.isFinite(n) || n < 1) {
+    throw new Error('--funding-amount-sol must be a number >= 1');
+  }
+  return n;
+}
+
+/** Signal-feed keys a strategy can opt into (partner-api SOURCE_FAMILY_FEEDS). */
+export const SOURCE_FAMILY_FEEDS = [
+  'alpha-pro',
+  'sec-form4',
+  'congress-ptr',
+  'sec-8k',
+  'analyst-ratings',
+] as const;
+
+/**
+ * --source-family: a registered feed key, or "null" to opt a strategy back
+ * out. Validated here because the generic flag parser accepts anything, and a
+ * typo would otherwise surface only as an API 400.
+ */
+export function parseSourceFamilyFlag(
+  value: string | undefined,
+): string | null | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (trimmed.toLowerCase() === 'null') return null;
+  if (!(SOURCE_FAMILY_FEEDS as readonly string[]).includes(trimmed)) {
+    throw new Error(
+      `--source-family must be one of: ${SOURCE_FAMILY_FEEDS.join(', ')}, or "null" (see \`milo signal-feeds\`)`,
+    );
+  }
+  return trimmed;
+}
+
 // ── Commands ──────────────────────────────────────────────────────
 
-// Partner MCP note: initialize can return 429 under bursty traffic or high load.
+// Partner MCP note: initialize can return 429 under bursty traffic or high load
+// (authenticated keys get a larger allowance than anonymous per-IP sessions).
+// MCP research tools return the rows as a second JSON text block, not only in
+// structuredContent.
 export const COMMANDS: CommandDef[] = [
   // ── Signup ────────────────────────────────────────────────────
 
@@ -421,7 +511,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'pause-order',
-    description: 'Pause an active order',
+    description: '⚠️ Replaces live state: pausing an order stops it executing — pausing a stop-loss/take-profit leaves the position unprotected until re-activated. Pause an active order',
     flags: [
       { name: 'order-id', description: 'Order ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
@@ -490,8 +580,15 @@ export const COMMANDS: CommandDef[] = [
     description: 'Get current auto-trade configuration',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
+      {
+        name: 'trading-account-id',
+        description:
+          'Trading account to read (ids are in `me` output: tradingAccounts). Omit for the default account.',
+      },
     ],
     handler: async (flags, client, config) => {
+      const accountId = parseTradingAccountIdFlag(flags['trading-account-id']);
+      if (accountId) return client.getAccountAutoTradeSettings(accountId);
       const userId = requireFlag(flags, 'user-id', config.user_id);
       return client.getAutoTradeSettings(userId);
     },
@@ -502,6 +599,11 @@ export const COMMANDS: CommandDef[] = [
     description: 'Update auto-trade configuration',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
+      {
+        name: 'trading-account-id',
+        description:
+          'Trading account to update (ids are in `me` output: tradingAccounts). Omit for the default account.',
+      },
       { name: 'is-active', description: 'Enable (true) or disable (false) auto-trading' },
       { name: 'risk-tolerance', description: 'conservative, balanced, or degen' },
       { name: 'strategy', description: 'VALUE INVESTOR, SWING TRADER, SCALPER, or CUSTOM' },
@@ -525,7 +627,6 @@ export const COMMANDS: CommandDef[] = [
       },
     ],
     handler: async (flags, client, config) => {
-      const userId = requireFlag(flags, 'user-id', config.user_id);
       const body: Record<string, unknown> = {};
       if (flags['is-active'] !== undefined) body.isActive = flags['is-active'] === 'true';
       if (flags['risk-tolerance']) body.riskTolerance = flags['risk-tolerance'];
@@ -550,7 +651,9 @@ export const COMMANDS: CommandDef[] = [
       if (Object.keys(body).length === 0) {
         throw new Error('At least one setting flag must be provided');
       }
-      return client.updateAutoTradeSettings(userId, body);
+      const accountId = parseTradingAccountIdFlag(flags['trading-account-id']);
+      if (accountId) return client.updateAccountAutoTradeSettings(accountId, body);
+      return client.updateAutoTradeSettings(requireFlag(flags, 'user-id', config.user_id), body);
     },
   },
 
@@ -613,6 +716,10 @@ export const COMMANDS: CommandDef[] = [
         description:
           'Per-asset-class settings JSON, including nested dataSources overrides.',
       },
+      {
+        name: 'source-family',
+        description: `Signal feed to opt into: ${SOURCE_FAMILY_FEEDS.join(', ')} (see \`signal-feeds\`)`,
+      },
       { name: 'is-public', description: 'Make publicly discoverable (true/false)' },
     ],
     handler: async (flags, client, config) => {
@@ -636,6 +743,8 @@ export const COMMANDS: CommandDef[] = [
           'asset-class-settings-json',
         );
       }
+      const sourceFamily = parseSourceFamilyFlag(flags['source-family']);
+      if (sourceFamily !== undefined) body.sourceFamily = sourceFamily;
       if (flags['is-public'] !== undefined) body.isPublic = flags['is-public'] === 'true';
       return client.createStrategy(userId, body);
     },
@@ -643,7 +752,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'update-strategy',
-    description: 'Update an existing strategy',
+    description: '⚠️ Replaces live state: every flag you pass overwrites the saved value (no merge); a strategy linked to an active account changes what it trades once re-synced. Update an existing strategy',
     flags: [
       { name: 'strategy-id', description: 'Strategy ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
@@ -662,6 +771,10 @@ export const COMMANDS: CommandDef[] = [
         name: 'asset-class-settings-json',
         description:
           'Per-asset-class settings JSON (or "null" to clear), including nested dataSources overrides.',
+      },
+      {
+        name: 'source-family',
+        description: `Signal feed to opt into: ${SOURCE_FAMILY_FEEDS.join(', ')}, or "null" to opt out`,
       },
       { name: 'is-public', description: 'Make public (true/false)' },
     ],
@@ -686,6 +799,8 @@ export const COMMANDS: CommandDef[] = [
           'asset-class-settings-json',
         );
       }
+      const sourceFamily = parseSourceFamilyFlag(flags['source-family']);
+      if (sourceFamily !== undefined) body.sourceFamily = sourceFamily;
       if (flags['is-public'] !== undefined) body.isPublic = flags['is-public'] === 'true';
       return client.updateStrategy(userId, strategyId, body);
     },
@@ -707,7 +822,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'sync-strategy',
-    description: 'Re-sync auto-trade settings with a linked strategy',
+    description: "⚠️ Replaces live state: re-applies the strategy's allocation/instructions onto the LIVE trading account while trading stays active. Re-sync auto-trade settings with a linked strategy",
     flags: [
       { name: 'strategy-id', description: 'Strategy ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
@@ -723,7 +838,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'create-conversation',
-    description: 'Start a conversation with a Milo AI agent',
+    description: '⚠️ May trigger trades: the auto-trader agent can act on the message (update autotrade settings, close positions). Start a conversation with a Milo AI agent',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
       { name: 'message', description: 'Initial message', required: true },
@@ -776,7 +891,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'send-message',
-    description: 'Send a message to a conversation',
+    description: '⚠️ May trigger trades: the auto-trader agent can act on the message (update autotrade settings, close positions). Send a message to a conversation',
     flags: [
       { name: 'conversation-id', description: 'Conversation ID', required: true },
       { name: 'message', description: 'Message text', required: true },
@@ -822,11 +937,19 @@ export const COMMANDS: CommandDef[] = [
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
       { name: 'strategy-id', description: 'Strategy ID to deploy', required: true },
+      {
+        name: 'funding-amount-sol',
+        description: 'SOL to fund the arena deployment with (min 1; default 1 server-side)',
+      },
     ],
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
       const strategyId = requireFlag(flags, 'strategy-id');
-      return client.deployArenaStrategy(userId, { strategyId });
+      const fundingAmountSol = parseFundingAmountSolFlag(flags['funding-amount-sol']);
+      return client.deployArenaStrategy(userId, {
+        strategyId,
+        ...(fundingAmountSol !== undefined ? { fundingAmountSol } : {}),
+      });
     },
   },
 
@@ -968,4 +1091,206 @@ export const COMMANDS: CommandDef[] = [
       return { config };
     },
   },
+
+  // ── Signal feeds & decisions ─────────────────────────────────
+
+  {
+    name: 'signal-feeds',
+    description:
+      'List registered catalyst signal feeds (family, rolloutStage: shadow | live_small | live, gate thresholds)',
+    flags: [],
+    handler: async (_flags, client) => {
+      return client.listSignalFeeds();
+    },
+  },
+
+  {
+    name: 'decisions',
+    description:
+      'Decision ledger — structured decision snapshots (confidence, gates, forward returns); orderPlaced=false marks shadow/gated decisions that never traded',
+    flags: [
+      { name: 'user-id', description: 'User ID (default: from config)' },
+      { name: 'action', description: 'Filter: trade or skip' },
+      { name: 'trading-account-id', description: 'Scope to one trading account' },
+      { name: 'page', description: `Page number (max: ${MAX_PAGE_VALUE})` },
+      { name: 'page-size', description: `Items per page (default: 25, max: ${MAX_PAGE_SIZE_VALUE})` },
+    ],
+    handler: async (flags, client, config) => {
+      const userId = requireFlag(flags, 'user-id', config.user_id);
+      validatePagingFlags(flags['page'], flags['page-size']);
+      return client.listDecisions(userId, {
+        action: flags['action'],
+        tradingAccountId: flags['trading-account-id'],
+        page: flags['page'],
+        pageSize: flags['page-size'],
+      });
+    },
+  },
+
+  // ── Research (market-level reads; API key only, no user id) ──
+
+  {
+    name: 'research-digest',
+    description:
+      'One-call 90-day disclosure digest for a US stock: insider Form 4 purchases, congressional trades, 8-K filings (whole-window counts/totals, top-5 notable rows, filing links)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA, BRK.B)', required: true },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      return client.getStockResearchDigest(ticker);
+    },
+  },
+
+  {
+    name: 'insider-transactions',
+    description:
+      "SEC Form 4 insider open-market purchases for a ticker, newest filing first (Milo's tracked universe only — check meta.coverage.tracked; meta.coverage.tickers lists exactly which tickers are polled)",
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+      { name: 'days', description: `Look-back window in days (default: 90, max: ${RESEARCH_MAX_DAYS})` },
+      { name: 'limit', description: `Max rows (default: 50, max: ${RESEARCH_MAX_LIMIT})` },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      validateResearchWindowFlags(flags['days'], flags['limit']);
+      return client.getInsiderTransactions({
+        ticker,
+        days: flags['days'],
+        limit: flags['limit'],
+      });
+    },
+  },
+
+  {
+    name: 'insider-buys',
+    description:
+      "Notable SEC Form 4 insider purchases across Milo's tracked universe, newest first, optionally above a USD value",
+    flags: [
+      { name: 'days', description: `Look-back window in days (default: 30, max: ${RESEARCH_MAX_DAYS})` },
+      { name: 'min-value-usd', description: 'Only purchases worth at least this many USD' },
+      { name: 'limit', description: `Max rows (default: 50, max: ${RESEARCH_MAX_LIMIT})` },
+    ],
+    handler: async (flags, client) => {
+      validateResearchWindowFlags(flags['days'], flags['limit']);
+      validateMinValueUsdFlag(flags['min-value-usd']);
+      return client.getRecentInsiderBuys({
+        days: flags['days'],
+        minValueUsd: flags['min-value-usd'],
+        limit: flags['limit'],
+      });
+    },
+  },
+
+  {
+    name: 'congress-trades',
+    description:
+      'Congressional PTR stock-trade disclosures for a ticker, or market-wide when --ticker is omitted (amount ranges, 30-45 day lag)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (omit for market-wide)' },
+      { name: 'days', description: `Look-back window in days by disclosure date (default: 90, max: ${RESEARCH_MAX_DAYS})` },
+      { name: 'limit', description: `Max rows (default: 50, max: ${RESEARCH_MAX_LIMIT})` },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], false);
+      validateResearchWindowFlags(flags['days'], flags['limit']);
+      return client.getCongressTrades({
+        ticker,
+        days: flags['days'],
+        limit: flags['limit'],
+      });
+    },
+  },
+
+  {
+    name: '8k-events',
+    description:
+      'Recent SEC 8-K material-event filings for a ticker with item codes and titles, newest acceptance first',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+      { name: 'days', description: `Look-back window in days by filing date (default: 90, max: ${RESEARCH_MAX_DAYS})` },
+      { name: 'limit', description: `Max rows (default: 50, max: ${RESEARCH_MAX_LIMIT})` },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      validateResearchWindowFlags(flags['days'], flags['limit']);
+      return client.get8kEvents({
+        ticker,
+        days: flags['days'],
+        limit: flags['limit'],
+      });
+    },
+  },
+
+  // Licensed (FMP-derived) research — OPTIONAL: the server mounts these routes
+  // only with MCP_LICENSED_RESEARCH_TOOLS=true (404 otherwise); 503
+  // provider_unavailable = upstream outage (retry), 404 = no data for ticker.
+
+  {
+    name: 'analyst-consensus',
+    description:
+      '[optional, licensed] Analyst consensus for a ticker: rating mix, price targets, recent grade actions (404 unless the server enables licensed research)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      return client.getAnalystConsensus(ticker);
+    },
+  },
+
+  {
+    name: 'fundamentals',
+    description:
+      '[optional, licensed] Quarterly fundamentals for a ticker: revenue, net income, free cash flow for the last 12 quarters (404 unless the server enables licensed research)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      return client.getStockFundamentals(ticker);
+    },
+  },
+
+  {
+    name: 'earnings-timeline',
+    description:
+      '[optional, licensed] Earnings timeline for a ticker: next scheduled report + up to 8 reported quarters with surprise % (404 unless the server enables licensed research)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      return client.getEarningsTimeline(ticker);
+    },
+  },
+
+  {
+    name: 'stock-news',
+    description:
+      '[optional, licensed] Recent news for a ticker with per-article sentiment in [-1, 1] (404 unless the server enables licensed research)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+      { name: 'limit', description: `Max articles (default: 8, max: ${RESEARCH_NEWS_MAX_LIMIT})` },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      validateResearchWindowFlags(undefined, flags['limit'], RESEARCH_NEWS_MAX_LIMIT);
+      return client.getStockNews({ ticker, limit: flags['limit'] });
+    },
+  },
+
+  {
+    name: 'peers',
+    description:
+      '[optional, licensed] Peer comparison for a ticker: the company first, then up to 5 peers by market cap with TTM multiples/margins (404 unless the server enables licensed research)',
+    flags: [
+      { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
+    ],
+    handler: async (flags, client) => {
+      const ticker = parseResearchTicker(flags['ticker'], true);
+      return client.getPeerComparison(ticker);
+    },
+  },
+
 ];
