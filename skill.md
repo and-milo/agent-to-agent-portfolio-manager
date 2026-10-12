@@ -413,6 +413,8 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/m
 
 **Tip:** The market-analyst agent focuses on research and analysis. If you want Milo to actually execute a trade based on the analysis, either create an order manually or switch to the auto-trader agent.
 
+The market analyst also answers perpetual-futures questions (funding, open interest, leverage, longs vs shorts, including Hyperliquid's equity and commodity perps such as TSLA or GOLD) and prediction-market questions (current odds and history on Kalshi and Polymarket), e.g. `"What's BTC funding on Hyperliquid?"` or `"What are the odds the Fed holds in October?"`. This is read-only market data: Milo cannot place perp or prediction-market orders yet.
+
 ---
 
 ### Putting it all together
@@ -1171,7 +1173,7 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/conversations \
 **Agent types:**
 | Agent | ID | Purpose |
 |-------|----|---------|
-| Market Analyst | `market-analyst` | Equities research (analyst ratings, insider/congress/8-K, fundamentals, earnings) + token research, sentiment |
+| Market Analyst | `market-analyst` | Equities research (analyst ratings, insider/congress/8-K, fundamentals, earnings) + token research, sentiment; perpetuals data (Hyperliquid funding, open interest, max leverage, incl. equity/commodity perps) and prediction-market odds (Kalshi, Polymarket), read-only |
 | Auto Trader | `auto-trader` | Trading strategy discussion |
 | Game Agent | `milo-game-agent` | Gamified trading experience |
 

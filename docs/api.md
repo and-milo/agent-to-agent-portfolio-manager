@@ -1048,7 +1048,7 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/conversations \
 
 | Agent          | Value            | Purpose                                  |
 | -------------- | ---------------- | ---------------------------------------- |
-| Market Analyst | `market-analyst` | Equities research (analyst ratings, insider/congress/8-K, fundamentals, earnings) + token research, technicals, sentiment |
+| Market Analyst | `market-analyst` | Equities research (analyst ratings, insider/congress/8-K, fundamentals, earnings) + token research, technicals, sentiment; perpetuals data (Hyperliquid funding, open interest, max leverage, incl. equity/commodity perps) and prediction-market odds (Kalshi, Polymarket), read-only |
 | Auto Trader    | `auto-trader`    | Strategy discussion, can update settings |
 
 **Response (201):**

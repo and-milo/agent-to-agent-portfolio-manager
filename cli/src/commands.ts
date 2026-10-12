@@ -842,7 +842,7 @@ export const COMMANDS: CommandDef[] = [
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
       { name: 'message', description: 'Initial message', required: true },
-      { name: 'agent-type', description: 'market-analyst or auto-trader (default: market-analyst)' },
+      { name: 'agent-type', description: 'market-analyst (research incl. read-only perps + prediction-market data) or auto-trader (default: market-analyst)' },
       { name: 'pay-overage', description: 'Legacy conversation-write retry helper (default: false)' },
       { name: 'payment-asset', description: 'Asset hint for --pay-overage legacy flow: USDC or SOL (default: USDC)' },
       { name: 'payment-tx-signature', description: 'Opaque legacy/v0/v1 Solana transaction signature used by --pay-overage (required with --pay-overage)' },
