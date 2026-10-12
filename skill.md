@@ -561,12 +561,7 @@ curl -X PATCH {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings \
     "riskTolerance": "balanced",
     "strategy": "SWING TRADER",
     "instructions": "Focus on SOL ecosystem tokens",
-    "customTickers": ["SOL", "JUP", "BONK"],
-    "dataSources": { "fundingRates": true, "openInterest": true },
-    "assetClassSettings": {
-      "memes": { "dataSources": { "liquidationData": true } },
-      "majors": { "dataSources": { "macroData": true } }
-    }
+    "customTickers": ["SOL", "JUP", "BONK"]
   }'
 ```
 
@@ -581,16 +576,9 @@ curl -X PATCH {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings \
 | `instructions` | string | Free-text trading instructions for the agent |
 | `customTickers` | string[] | Specific tokens to focus on |
 | `allocation` | object | Asset class allocation percentages |
-| `dataSources` | object \| null | Global data-source toggles: `fundingRates`, `openInterest`, `liquidationData`, `macroData` |
-| `assetClassSettings` | object \| null | Per-asset-class configuration, including nested `dataSources` overrides |
+| `assetClassSettings` | object | Per-asset-class configuration |
 
 **Asset classes for allocation:** `trenches`, `memes`, `promising-memes`, `staking`, `native`, `majors`, `stables`, `xStocks`, `custom`
-
-Data-source resolution notes:
-- Asset-class `dataSources` overrides win over top-level `dataSources`.
-- If no override exists, the top-level value applies.
-- Missing keys are treated as disabled.
-- PATCH deep-merges `dataSources` both globally and inside `assetClassSettings`, so partial updates do not wipe sibling keys.
 
 Model entitlement notes:
 - Only canonical model ids are accepted on the partner surface.
@@ -600,12 +588,6 @@ Model entitlement notes:
 - Canonical Gemini model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
 - Canonical Grok model ids are `grok-4.1-fast-reasoning` and `grok-4`.
 - If a model is unavailable for your account, the API returns `400 Bad Request` with `error.details.requiredPlan`, `error.details.upgradeUrl`, and an error message containing the same plan-specific Stripe link.
-
-Data-source entitlement notes:
-- Only `pro` and `max` users can create, update, apply, sync, or otherwise change `dataSources`.
-- Free users can still read saved `dataSources` in GET responses.
-- If an account downgrades, saved `dataSources` remain visible but are inactive in auto-trader chat, execution, and position review until the account is back on Pro or Max.
-- When blocked, the API returns `400 Bad Request` with `error.details.feature = "dataSources"`, `error.details.requiredPlan = "pro"`, and upgrade details when available.
 
 ---
 
@@ -634,11 +616,6 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies \
     "instructions": "Focus on SOL, JUP, and BONK with balanced entries",
     "allocation": { "majors": 45, "native": 25, "staking": 10, "promising-memes": 15, "xStocks": 5 },
     "customTickers": ["SOL", "JUP", "BONK"],
-    "dataSources": { "fundingRates": true, "openInterest": true },
-    "assetClassSettings": {
-      "memes": { "dataSources": { "liquidationData": true } },
-      "majors": { "dataSources": { "macroData": true } }
-    },
     "isPublic": false
   }'
 ```
@@ -665,11 +642,8 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings/strategies \
 | `strategy` | string | yes (create) | `VALUE INVESTOR`, `SWING TRADER`, `SCALPER`, `CUSTOM` |
 | `allocation` | object | no | Asset class allocation percentages |
 | `customTickers` | string[] \| null | no | Token tickers to focus on |
-| `dataSources` | object \| null | no | Global data-source toggles carried into the strategy snapshot |
-| `assetClassSettings` | object \| null | no | Per-asset-class configuration, including nested `dataSources` |
+| `assetClassSettings` | object \| null | no | Per-asset-class configuration |
 | `isPublic` | boolean | no | Make strategy publicly discoverable |
-
-The same Pro/Max restriction applies when creating or updating a strategy with `dataSources`, and when syncing a linked strategy that already contains them.
 
 #### GET /api/v1/users/{userId}/auto-trade-settings/strategies
 List strategies with filters.

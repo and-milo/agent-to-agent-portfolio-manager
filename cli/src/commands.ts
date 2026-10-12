@@ -514,14 +514,9 @@ export const COMMANDS: CommandDef[] = [
       { name: 'allocation-json', description: 'Asset class allocation JSON (e.g. \'{"majors":40,"memes":20}\')' },
       { name: 'custom-tickers-json', description: 'Custom tickers JSON array (e.g. \'["SOL","JUP"]\')' },
       {
-        name: 'data-sources-json',
-        description:
-          'Global data-source settings JSON (or "null" to clear). Supported keys: fundingRates, openInterest, liquidationData, macroData. Only Pro and Max can change these settings.',
-      },
-      {
         name: 'asset-class-settings-json',
         description:
-          'Per-asset-class settings JSON (or "null" to clear), including nested dataSources overrides.',
+          'Per-asset-class settings JSON.',
       },
     ],
     handler: async (flags, client, config) => {
@@ -538,9 +533,6 @@ export const COMMANDS: CommandDef[] = [
       if (allocation) body.allocation = allocation;
       const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
       if (tickers) body.customTickers = tickers;
-      if (flags['data-sources-json'] !== undefined) {
-        body.dataSources = parseJson(flags['data-sources-json'], 'data-sources-json');
-      }
       if (flags['asset-class-settings-json'] !== undefined) {
         body.assetClassSettings = parseJson(
           flags['asset-class-settings-json'],
@@ -604,14 +596,9 @@ export const COMMANDS: CommandDef[] = [
       { name: 'allocation-json', description: 'Asset class allocation JSON' },
       { name: 'custom-tickers-json', description: 'Custom tickers JSON array' },
       {
-        name: 'data-sources-json',
-        description:
-          'Global data-source settings JSON. Supported keys: fundingRates, openInterest, liquidationData, macroData. Only Pro and Max can change these settings.',
-      },
-      {
         name: 'asset-class-settings-json',
         description:
-          'Per-asset-class settings JSON, including nested dataSources overrides.',
+          'Per-asset-class settings JSON.',
       },
       { name: 'is-public', description: 'Make publicly discoverable (true/false)' },
     ],
@@ -627,9 +614,6 @@ export const COMMANDS: CommandDef[] = [
       if (allocation) body.allocation = allocation;
       const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
       if (tickers) body.customTickers = tickers;
-      if (flags['data-sources-json'] !== undefined) {
-        body.dataSources = parseJson(flags['data-sources-json'], 'data-sources-json');
-      }
       if (flags['asset-class-settings-json'] !== undefined) {
         body.assetClassSettings = parseJson(
           flags['asset-class-settings-json'],
@@ -654,14 +638,9 @@ export const COMMANDS: CommandDef[] = [
       { name: 'allocation-json', description: 'Asset class allocation JSON' },
       { name: 'custom-tickers-json', description: 'Custom tickers JSON array' },
       {
-        name: 'data-sources-json',
-        description:
-          'Global data-source settings JSON (or "null" to clear). Supported keys: fundingRates, openInterest, liquidationData, macroData. Only Pro and Max can change these settings.',
-      },
-      {
         name: 'asset-class-settings-json',
         description:
-          'Per-asset-class settings JSON (or "null" to clear), including nested dataSources overrides.',
+          'Per-asset-class settings JSON (or "null" to clear).',
       },
       { name: 'is-public', description: 'Make public (true/false)' },
     ],
@@ -677,9 +656,6 @@ export const COMMANDS: CommandDef[] = [
       if (allocation) body.allocation = allocation;
       const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
       if (tickers) body.customTickers = tickers;
-      if (flags['data-sources-json'] !== undefined) {
-        body.dataSources = parseJson(flags['data-sources-json'], 'data-sources-json');
-      }
       if (flags['asset-class-settings-json'] !== undefined) {
         body.assetClassSettings = parseJson(
           flags['asset-class-settings-json'],
