@@ -102,7 +102,7 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | Command | Description |
 |---------|-------------|
 | `research-digest` | One-call 90-day disclosure digest for a ticker: insider Form 4 purchases, congressional trades, 8-K filings — whole-window counts/totals, top-5 notable rows, filing links |
-| `insider-transactions` | SEC Form 4 insider open-market purchases for a ticker (Milo's tracked universe only, the S&P 500 plus its tokenized names — check `meta.coverage.tracked`) |
+| `insider-transactions` | SEC Form 4 insider open-market purchases for a ticker (Milo's tracked universe only — check `meta.coverage.tracked`; `meta.coverage.tickers` lists exactly which tickers are polled) |
 | `insider-buys` | Notable insider purchases across Milo's tracked universe, optionally above `--min-value-usd` |
 | `congress-trades` | Congressional PTR disclosures for a ticker, or market-wide when `--ticker` is omitted |
 | `8k-events` | SEC 8-K material-event filings for a ticker with item codes and titles |

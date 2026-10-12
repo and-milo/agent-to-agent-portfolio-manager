@@ -507,7 +507,7 @@ Every response carries `meta.source` (what the data is and how fresh) and, where
 Coverage caveats (stated in every response):
 
 - Form 4 ingestion is **purchases only** (transaction code `P`) and covers only Milo's tracked
-  US-equity universe (the S&P 500 plus its tokenized names) — `meta.coverage.tickers` lists it and `meta.coverage.tracked` says whether
+  US-equity universe (in production the S&P 500 plus its tokenized names; `meta.coverage.tickers` is authoritative) — `meta.coverage.tickers` lists it and `meta.coverage.tracked` says whether
   the requested ticker is in it. An empty result for an untracked ticker means "not tracked", not
   "no insider activity". Coverage is issuer-aware: share classes of one SEC registrant (GOOG/GOOGL,
   BRK.A/BRK.B) share a CIK and resolve to one issuer label

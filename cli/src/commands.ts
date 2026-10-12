@@ -1101,7 +1101,7 @@ export const COMMANDS: CommandDef[] = [
   {
     name: 'insider-transactions',
     description:
-      "SEC Form 4 insider open-market purchases for a ticker, newest filing first (Milo's tracked universe only, the S&P 500 plus its tokenized names — check meta.coverage.tracked)",
+      "SEC Form 4 insider open-market purchases for a ticker, newest filing first (Milo's tracked universe only — check meta.coverage.tracked; meta.coverage.tickers lists exactly which tickers are polled)",
     flags: [
       { name: 'ticker', description: 'US equity ticker, 1-6 chars (e.g. NVDA)', required: true },
       { name: 'days', description: `Look-back window in days (default: 90, max: ${RESEARCH_MAX_DAYS})` },
