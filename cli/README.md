@@ -115,11 +115,7 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
   - Anthropic canonical model ids are `claude-opus-4.5` and `claude-opus-4.6`.
   - Gemini canonical model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
   - Grok canonical model ids are `grok-4.1-fast-reasoning` and `grok-4`.
-- `update-settings`, `create-strategy`, `update-strategy`, and `sync-strategy` enforce `dataSources` entitlement.
-  - Supported data-source keys are `fundingRates`, `openInterest`, `liquidationData`, and `macroData`.
-  - Only Pro and Max can change `dataSources`, or sync a strategy that already contains them.
-  - Use `--data-sources-json` for global toggles and `--asset-class-settings-json` for per-asset overrides.
-  - Use `--data-sources-json null` or `--asset-class-settings-json null` on update endpoints to clear saved values.
+- Use `--asset-class-settings-json` for per-asset-class configuration. On `update-strategy`, `--asset-class-settings-json null` clears the saved value; `update-settings` does not accept `null` for it.
 - Some write-heavy commands are more likely to receive `429` during bursts (for example order creation, close-all positions, and conversation writes). Build retries with backoff.
 - On `429`, respect `Retry-After` and retry only after that delay.
 
@@ -155,16 +151,8 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
   --model-version claude-opus-4.5 \
   --allocation-json '{"majors":40,"memes":20,"stables":30,"native":10}'
 
-# Add paid data-source settings with per-asset overrides
-./dist/milo update-settings \
-  --data-sources-json '{"fundingRates":true,"openInterest":true}' \
-  --asset-class-settings-json '{"memes":{"dataSources":{"liquidationData":true}},"majors":{"dataSources":{"macroData":true}}}'
-
 # Clear preferred model (revert to entitlement-based/default resolution)
 ./dist/milo update-settings --model-version null
-
-# Clear saved data-source settings
-./dist/milo update-settings --data-sources-json null
 
 # Conversations with Milo AI
 ./dist/milo create-conversation --message "Analyze SOL price action" --agent-type market-analyst

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { PartnerApiClient } from './client.js';
 import {
+  COMMANDS,
   parseModelVersionFlag,
   validateCreateOrderDependants,
   validatePagingFlags,
@@ -86,4 +88,57 @@ test('rejects internal model aliases', () => {
     () => parseModelVersionFlag('milo-pro'),
     /--model-version must be one of:/,
   );
+});
+
+// The partner API strips unknown body keys, so a dataSources flag would be
+// silently dropped. Keep the settings/strategy commands free of it.
+const SETTINGS_WRITE_COMMANDS = ['update-settings', 'create-strategy', 'update-strategy'];
+
+function getCommand(name: string) {
+  const command = COMMANDS.find((c) => c.name === name);
+  assert.ok(command, `missing command ${name}`);
+  return command;
+}
+
+function captureClient() {
+  const bodies: Record<string, unknown>[] = [];
+  const record = async (...args: unknown[]) => {
+    bodies.push(args[args.length - 1] as Record<string, unknown>);
+    return {};
+  };
+  const client = {
+    updateAutoTradeSettings: record,
+    createStrategy: record,
+    updateStrategy: record,
+  } as unknown as PartnerApiClient;
+  return { client, bodies };
+}
+
+test('settings and strategy commands do not expose dataSources', () => {
+  for (const name of SETTINGS_WRITE_COMMANDS) {
+    const command = getCommand(name);
+    for (const flag of command.flags) {
+      assert.doesNotMatch(flag.name, /data-sources/i, `${name} --${flag.name}`);
+      assert.doesNotMatch(flag.description, /dataSources/, `${name} --${flag.name}`);
+    }
+  }
+});
+
+test('settings and strategy commands send assetClassSettings without dataSources', async () => {
+  const assetClassSettings = { memes: { maxPositionUsd: 50 } };
+  const flags: Record<string, string> = {
+    'user-id': 'user-1',
+    'strategy-id': 'strategy-1',
+    name: 'Test',
+    strategy: 'SWING TRADER',
+    'asset-class-settings-json': JSON.stringify(assetClassSettings),
+    'data-sources-json': '{"fundingRates":true}',
+  };
+  for (const name of SETTINGS_WRITE_COMMANDS) {
+    const { client, bodies } = captureClient();
+    await getCommand(name).handler(flags, client, {});
+    assert.equal(bodies.length, 1, name);
+    assert.deepEqual(bodies[0].assetClassSettings, assetClassSettings, name);
+    assert.equal('dataSources' in bodies[0], false, name);
+  }
 });

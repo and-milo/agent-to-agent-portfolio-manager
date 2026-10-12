@@ -197,12 +197,7 @@ curl -X PATCH https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-sett
     "strategy": "SWING TRADER",
     "instructions": "Focus on SOL ecosystem tokens",
     "customTickers": ["SOL", "JUP", "BONK"],
-    "allocation": { "majors": 40, "native": 30, "memes": 20, "stables": 10 },
-    "dataSources": { "fundingRates": true, "openInterest": true },
-    "assetClassSettings": {
-      "memes": { "dataSources": { "liquidationData": true } },
-      "majors": { "dataSources": { "macroData": true } }
-    }
+    "allocation": { "majors": 40, "native": 30, "memes": 20, "stables": 10 }
   }'
 ```
 
@@ -216,18 +211,11 @@ curl -X PATCH https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-sett
 | `instructions` | string | Free-text trading instructions |
 | `customTickers` | string[] | Tokens to focus on |
 | `allocation` | object | Asset class percentages |
-| `dataSources` | object \| null | Global data-source toggles: `fundingRates`, `openInterest`, `liquidationData`, `macroData` |
-| `assetClassSettings` | object \| null | Per-asset-class configuration, including nested `dataSources` overrides |
+| `assetClassSettings` | object | Per-asset-class configuration |
 
 **Asset classes:** `trenches`, `memes`, `promising-memes`, `staking`, `native`, `majors`, `stables`, `xStocks`, `custom`
 
 `isActive` can only be set to `true` if the Milo wallet holds at least 1 SOL.
-
-Data-source resolution notes:
-- Asset-class `dataSources` overrides win over top-level `dataSources`.
-- If no override exists, the top-level value applies.
-- Missing keys are treated as disabled.
-- PATCH deep-merges `dataSources` both globally and inside `assetClassSettings`, so partial updates do not wipe sibling keys.
 
 Model entitlement notes:
 - Only canonical model ids are accepted on the partner surface.
@@ -237,12 +225,6 @@ Model entitlement notes:
 - Canonical Gemini model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
 - Canonical Grok model ids are `grok-4.1-fast-reasoning` and `grok-4`.
 - If a model is unavailable for your account, the API returns `400 Bad Request` with `error.details.requiredPlan`, `error.details.upgradeUrl`, and an error message containing the same plan-specific Stripe link.
-
-Data-source entitlement notes:
-- Only `pro` and `max` users can create, update, apply, sync, or otherwise change `dataSources`.
-- Free users can still read saved `dataSources` in GET responses.
-- If an account downgrades, saved `dataSources` remain visible but are inactive in auto-trader chat, execution, and position review until the account is back on Pro or Max.
-- When blocked, the API returns `400 Bad Request` with `error.details.feature = "dataSources"`, `error.details.requiredPlan = "pro"`, and upgrade details when available.
 
 ---
 
@@ -265,11 +247,6 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-setti
     "instructions": "Focus on SOL, JUP, and BONK",
     "allocation": { "majors": 45, "native": 25, "staking": 10, "promising-memes": 15, "xStocks": 5 },
     "customTickers": ["SOL", "JUP", "BONK"],
-    "dataSources": { "fundingRates": true, "openInterest": true },
-    "assetClassSettings": {
-      "memes": { "dataSources": { "liquidationData": true } },
-      "majors": { "dataSources": { "macroData": true } }
-    },
     "isPublic": false
   }'
 ```
@@ -282,11 +259,8 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-setti
 | `instructions` | string | no | Free-text instructions (max 4000 chars) |
 | `allocation` | object | no | Asset class percentages |
 | `customTickers` | string[] | no | Token tickers to focus on |
-| `dataSources` | object \| null | no | Global data-source toggles carried into the strategy snapshot |
-| `assetClassSettings` | object \| null | no | Per-asset-class configuration, including nested `dataSources` |
+| `assetClassSettings` | object \| null | no | Per-asset-class configuration |
 | `isPublic` | boolean | no | Make publicly discoverable |
-
-The same Pro/Max restriction applies when creating or updating a strategy with `dataSources`, and when syncing a linked strategy that already contains them.
 
 #### List Strategies
 
