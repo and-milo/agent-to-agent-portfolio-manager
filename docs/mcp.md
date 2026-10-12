@@ -103,7 +103,7 @@ Common macOS path:
 - MCP `POST /mcp` initialize can start without `X-API-Key` for signup bootstrap, or without any credential for the OAuth lazy-auth flow (the first protected `tools/call` then returns the `401` challenge above).
 - After signup, use returned API key for authenticated tools. OAuth clients present `Authorization: Bearer mat_…` on every request instead.
 - With OAuth, `userId` arguments are optional (they default to the signed-in user; a different value is refused). With an API key they are required as before.
-- Initialize is subject to throttling and session-capacity protections, so clients should handle `429` and respect `Retry-After` before retrying. Authenticated initialize (API key / OAuth grant) has a much larger allowance than anonymous per-IP initialize; clients that open a new session per tool call should send `X-API-Key` on every request.
+- Initialize is subject to throttling and session-capacity protections, so clients should handle `429` and respect `Retry-After` before retrying. Authenticated initialize (API key / OAuth grant) has a much larger allowance than anonymous per-IP initialize; clients that open a new session per tool call should send `X-API-Key` on every request. Each API key / OAuth user keeps at most 10 live MCP sessions: initializing an 11th closes that principal's least recently used session (requests on it then get an invalid-session error; re-initialize).
 - Sessions can expire after idle periods or under load; re-initialize after invalid-session errors.
 - Conversation write overage supports x402-style payment flow (`402 Payment Required` challenge + payment proof on retry).
 
