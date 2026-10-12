@@ -580,7 +580,7 @@ export const COMMANDS: CommandDef[] = [
       {
         name: 'trading-account-id',
         description:
-          'Trading account to read (see list-trading-accounts). Omit for the default account.',
+          'Trading account to read (ids are in `me` output: tradingAccounts). Omit for the default account.',
       },
     ],
     handler: async (flags, client, config) => {
@@ -599,7 +599,7 @@ export const COMMANDS: CommandDef[] = [
       {
         name: 'trading-account-id',
         description:
-          'Trading account to update (see list-trading-accounts). Omit for the default account.',
+          'Trading account to update (ids are in `me` output: tradingAccounts). Omit for the default account.',
       },
       { name: 'is-active', description: 'Enable (true) or disable (false) auto-trading' },
       { name: 'risk-tolerance', description: 'conservative, balanced, or degen' },
