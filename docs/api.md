@@ -311,6 +311,7 @@ curl -X PATCH https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-sett
 | `modelVersion`  | string \| null | Preferred model for autotrade decisions                                                                         |
 | `instructions`  | string         | Free-text trading instructions                                                                                  |
 | `customTickers` | string[]       | Tokens to focus on                                                                                              |
+| `assetClassSettings` | object | Per-asset-class configuration, keyed by asset class |
 | `allocation`    | object         | Asset class percentages                                                                                         |
 
 When `strategyId` is a non-null saved strategy id, the API applies that strategy server-side. The saved `instructions`, `allocation`, `customTickers`, `assetClassSettings`, and `strategy` values are snapshotted into settings; duplicate values for those fields in the same request are ignored. `riskTolerance`, `riskPolicy`, and top-level budget limits are user-level overlays: updating only those overlay fields does not unlink or rewrite a saved strategy. Updating `riskTolerance` derives the matching default `riskPolicy`. Updating strategy fields such as `instructions`, `allocation`, `customTickers`, `assetClassSettings`, or `strategy` without a `strategyId` unlinks any active saved strategy.
@@ -387,6 +388,7 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-setti
 | `instructions`  | string   | no       | Free-text instructions (max 4000 chars)               |
 | `allocation`    | object   | no       | Asset class percentages                               |
 | `customTickers` | string[] | no       | Token tickers to focus on                             |
+| `assetClassSettings` | object \| null | no | Per-asset-class configuration, keyed by asset class |
 | `isPublic`      | boolean  | no       | Make publicly discoverable                            |
 | `sourceFamily`  | string \| null | no | Registered signal feed the agent opts into (family routing): `congress-ptr`, `sec-form4`, `sec-8k`, or `alpha-pro`. Omit or `null` for generic scan/TA agents. |
 

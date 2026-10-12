@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   COMMANDS,
   parseModelVersionFlag,
+  parseSourceFamilyFlag,
   parseResearchTicker,
   validateCreateOrderDependants,
   validateMinValueUsdFlag,
@@ -186,4 +187,42 @@ test('research command handlers forward validated flags to the client', async ()
   await assert.rejects(run('research-digest', {}), /Missing required flag --ticker/);
   await assert.rejects(run('insider-transactions', { ticker: 'NVDA', limit: '101' }), /--limit cannot exceed 100/);
   await assert.rejects(run('stock-news', { ticker: 'NVDA', limit: '13' }), /--limit cannot exceed 12/);
+});
+
+test('--source-family accepts registered feeds and "null", rejects anything else', () => {
+  assert.equal(parseSourceFamilyFlag(undefined), undefined);
+  assert.equal(parseSourceFamilyFlag('congress-ptr'), 'congress-ptr');
+  assert.equal(parseSourceFamilyFlag(' NULL '), null);
+  assert.throws(() => parseSourceFamilyFlag('congress'), /--source-family must be one of/);
+  assert.throws(() => parseSourceFamilyFlag(''), /--source-family must be one of/);
+});
+
+test('create-strategy and update-strategy forward sourceFamily', async () => {
+  const calls: Array<[string, unknown[]]> = [];
+  const client = new Proxy(
+    {},
+    {
+      get:
+        (_t, method: string) =>
+        (...args: unknown[]) => {
+          calls.push([method, args]);
+          return Promise.resolve({ data: {} });
+        },
+    },
+  ) as any;
+  const run = (name: string, flags: Record<string, string | undefined>) =>
+    COMMANDS.find((c) => c.name === name)!.handler(flags, client, {} as any);
+
+  await run('create-strategy', {
+    'user-id': 'u1',
+    name: 'Congress buys',
+    strategy: 'CUSTOM',
+    'source-family': 'congress-ptr',
+  });
+  await run('update-strategy', { 'user-id': 'u1', 'strategy-id': 's1', 'source-family': 'null' });
+  await run('update-strategy', { 'user-id': 'u1', 'strategy-id': 's1', name: 'x' });
+
+  assert.equal((calls[0][1][1] as any).sourceFamily, 'congress-ptr');
+  assert.equal((calls[1][1][2] as any).sourceFamily, null);
+  assert.ok(!('sourceFamily' in (calls[2][1][2] as any)));
 });

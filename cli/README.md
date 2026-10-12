@@ -79,8 +79,8 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `update-settings` | Update auto-trade configuration |
 | `list-strategies` | List autotrade strategies |
 | `get-strategy` | Get strategy details |
-| `create-strategy` | Create a strategy |
-| `update-strategy` | ⚠️ Update a strategy (passed fields overwrite saved values; affects a linked live account once re-synced) |
+| `create-strategy` | Create a strategy (`--source-family` opts it into a signal feed; see `signal-feeds`) |
+| `update-strategy` | ⚠️ Update a strategy (passed fields overwrite saved values; affects a linked live account once re-synced; `--source-family null` opts out of a feed) |
 | `delete-strategy` | Delete a strategy |
 | `sync-strategy` | ⚠️ Re-sync settings with a linked strategy (replaces the live account's allocation/instructions) |
 | `deploy-arena` | Deploy a public strategy to the arena |

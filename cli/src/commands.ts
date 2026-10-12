@@ -188,6 +188,34 @@ export function parseModelVersionFlag(
   return trimmed;
 }
 
+/** Signal-feed keys a strategy can opt into (partner-api SOURCE_FAMILY_FEEDS). */
+export const SOURCE_FAMILY_FEEDS = [
+  'alpha-pro',
+  'sec-form4',
+  'congress-ptr',
+  'sec-8k',
+  'analyst-ratings',
+] as const;
+
+/**
+ * --source-family: a registered feed key, or "null" to opt a strategy back
+ * out. Validated here because the generic flag parser accepts anything, and a
+ * typo would otherwise surface only as an API 400.
+ */
+export function parseSourceFamilyFlag(
+  value: string | undefined,
+): string | null | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (trimmed.toLowerCase() === 'null') return null;
+  if (!(SOURCE_FAMILY_FEEDS as readonly string[]).includes(trimmed)) {
+    throw new Error(
+      `--source-family must be one of: ${SOURCE_FAMILY_FEEDS.join(', ')}, or "null" (see \`milo signal-feeds\`)`,
+    );
+  }
+  return trimmed;
+}
+
 // ── Commands ──────────────────────────────────────────────────────
 
 // Partner MCP note: initialize can return 429 under bursty traffic or high load
@@ -652,6 +680,10 @@ export const COMMANDS: CommandDef[] = [
         description:
           'Per-asset-class settings JSON, including nested dataSources overrides.',
       },
+      {
+        name: 'source-family',
+        description: `Signal feed to opt into: ${SOURCE_FAMILY_FEEDS.join(', ')} (see \`signal-feeds\`)`,
+      },
       { name: 'is-public', description: 'Make publicly discoverable (true/false)' },
     ],
     handler: async (flags, client, config) => {
@@ -675,6 +707,8 @@ export const COMMANDS: CommandDef[] = [
           'asset-class-settings-json',
         );
       }
+      const sourceFamily = parseSourceFamilyFlag(flags['source-family']);
+      if (sourceFamily !== undefined) body.sourceFamily = sourceFamily;
       if (flags['is-public'] !== undefined) body.isPublic = flags['is-public'] === 'true';
       return client.createStrategy(userId, body);
     },
@@ -702,6 +736,10 @@ export const COMMANDS: CommandDef[] = [
         description:
           'Per-asset-class settings JSON (or "null" to clear), including nested dataSources overrides.',
       },
+      {
+        name: 'source-family',
+        description: `Signal feed to opt into: ${SOURCE_FAMILY_FEEDS.join(', ')}, or "null" to opt out`,
+      },
       { name: 'is-public', description: 'Make public (true/false)' },
     ],
     handler: async (flags, client, config) => {
@@ -725,6 +763,8 @@ export const COMMANDS: CommandDef[] = [
           'asset-class-settings-json',
         );
       }
+      const sourceFamily = parseSourceFamilyFlag(flags['source-family']);
+      if (sourceFamily !== undefined) body.sourceFamily = sourceFamily;
       if (flags['is-public'] !== undefined) body.isPublic = flags['is-public'] === 'true';
       return client.updateStrategy(userId, strategyId, body);
     },
