@@ -2,7 +2,7 @@
 
 ## Overview
 
-Milo's trading engine executes swaps on Solana with DFlow `/order` routing and wallet-aware transaction generation, then submits signed transactions through Helius Sender for low-latency landing. Every trade — whether placed manually or triggered by Milo's auto-trader — still settles on Solana from the user's wallet.
+Milo's trading engine executes swaps on Solana with DFlow `/order` routing and wallet-aware transaction generation, then submits signed transactions for settlement: v0 transactions through Helius Sender for low-latency landing, v1 transactions over standard RPC until the Sender compatibility gate is enabled. Every trade — whether placed manually or triggered by Milo's auto-trader — still settles on Solana from the user's wallet.
 
 There is no centralized order book. No custodial exchange. Your tokens stay in your wallet until the moment a swap settles on-chain.
 
@@ -44,7 +44,7 @@ Milo never takes custody of your funds.
 
 - **Non-custodial wallets** — Each user gets a Solana wallet powered by [Turnkey](https://turnkey.com). The signing key belongs to you, not Milo. Milo receives delegated permission to execute trades on your behalf.
 - **On-chain settlement** — Every swap is a Solana transaction. You can verify it on any block explorer.
-- **DFlow routing + Helius Sender landing** — Trades use DFlow `/order` for executable route discovery and transaction generation, then use Helius Sender for low-latency transaction submission.
+- **DFlow routing + Helius Sender landing** — Trades use DFlow `/order` for executable route discovery and transaction generation, then submit v0 transactions through Helius Sender for low-latency landing (v1 stays on standard RPC until the Sender compatibility gate is enabled).
 - **No counterparty risk** — Milo doesn't hold your tokens, doesn't run an order book, and doesn't match trades internally. Every trade settles peer-to-pool on Solana.
 
 ---

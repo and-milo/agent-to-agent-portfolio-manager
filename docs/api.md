@@ -4,7 +4,7 @@
 
 HTTP API for external partners to manage users, wallets, trading, and AI conversations on Milo. All endpoints are versioned under `/api/v1` and require an API key (except signup).
 
-Trading execution note: executable swap previews and transactions now come from DFlow `/order`, and signed swap transactions are submitted through Helius Sender. The partner-facing request and response shapes remain unchanged.
+Trading execution note: executable swap previews and transactions now come from DFlow `/order`, and signed v0 swap transactions are submitted through Helius Sender (v1 stays on standard RPC until the Sender compatibility gate is enabled). The partner-facing request and response shapes remain unchanged.
 
 Need an API key? [Contact us on Discord](https://discord.com/invite/join-milo)
 
@@ -486,7 +486,7 @@ applied before an LLM ever sees the candidate.
 ### Research
 
 Synchronous, read-only **stock research** reads. They are market-level: no `userId` or
-`walletId`, just an API key. All routes live under `/api/v1/research/`, accept a `ticker`
+`walletId`, just a credential (API key or OAuth bearer; no scope needed). All routes live under `/api/v1/research/`, accept a `ticker`
 query parameter (1-6 chars, letters/digits, `.`/`-` allowed, case-insensitive — normalized
 to upper case; invalid tickers return `400 bad_request`), cap `limit` at 100 and `days` at 365
 (out-of-range values return `400`), and are rate-limited at 60 requests/min per API key.

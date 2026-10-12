@@ -19,7 +19,7 @@ The build produces `dist/milo` — a self-contained executable.
 ## MCP Endpoint
 
 The same partner-api server exposes MCP on `/mcp` (Streamable HTTP).  
-`POST /mcp` initialize accepts optional `X-API-Key` or an OAuth 2.1 bearer token (`Authorization: Bearer mat_…`; discovery at `/.well-known/oauth-authorization-server`, consent with your Solana wallet). Without either, MCP is limited to signup/public tools and `tools/list` until `signup` returns an API key or the first `tools/call` triggers the OAuth `401` challenge. The CLI itself keeps using API keys. The key `signup` returns is bound to that MCP session only: clients that open a new session per tool call must send it as `X-API-Key` on every request. Throttling and session-capacity protections are enforced (authenticated callers get a larger initialize allowance than anonymous per-IP sessions), so initialize can return `429`. Respect `Retry-After` before retrying and re-initialize after invalid-session errors.  
+`POST /mcp` initialize accepts optional `X-API-Key` or an OAuth 2.1 bearer token (`Authorization: Bearer mat_…`; discovery at `/.well-known/oauth-authorization-server`, consent with your Solana wallet). Without either, MCP is limited to signup/public tools and `tools/list` until `signup` returns an API key or the first protected `tools/call` (anything beyond the public signup tools) triggers the OAuth `401` challenge. The CLI itself keeps using API keys. The key `signup` returns is bound to that MCP session only: clients that open a new session per tool call must send it as `X-API-Key` on every request. Throttling and session-capacity protections are enforced (authenticated callers get a larger initialize allowance than anonymous per-IP sessions), so initialize can return `429`. Respect `Retry-After` before retrying and re-initialize after invalid-session errors.  
 MCP tools are annotated read-only vs destructive: money-moving/irreversible tools, state-replacing tools (`sync_strategy`, `update_strategy`, `pause_order`) and the conversation writes (`create_conversation`, `send_message` — the agent can update autotrade settings or close positions when asked) carry `destructiveHint: true` and a ⚠️ warning in the description; only signup, `create_strategy` and `claim_quest` are additive writes. The matching CLI commands (`pause-order`, `update-strategy`, `sync-strategy`, `create-conversation`, `send-message`) carry the same ⚠️ in their help text — confirm before running them; see `docs/mcp.md`.  
 This CLI continues to use the REST endpoints directly.
 
@@ -97,7 +97,9 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `diary-logs` | Get auto-trade diary logs |
 | `config` | Show or update `~/.milo/config.json` |
 
-### Stock research (API key or OAuth bearer, no user id)
+### Stock research (API key, no user id)
+
+The CLI authenticates with an API key (`--api-key` / `MILO_API_KEY`, sent as `X-API-Key`). The underlying REST routes and MCP tools also accept an OAuth bearer, but the CLI does not send one.
 
 | Command | Description |
 |---------|-------------|
