@@ -190,7 +190,10 @@ export function parseModelVersionFlag(
 
 // ── Commands ──────────────────────────────────────────────────────
 
-// Partner MCP note: initialize can return 429 under bursty traffic or high load.
+// Partner MCP note: initialize can return 429 under bursty traffic or high load
+// (authenticated keys get a larger allowance than anonymous per-IP sessions).
+// MCP research tools return the rows as a second JSON text block, not only in
+// structuredContent.
 export const COMMANDS: CommandDef[] = [
   // ── Signup ────────────────────────────────────────────────────
 
