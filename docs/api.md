@@ -390,7 +390,7 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-setti
 | `customTickers` | string[] | no       | Token tickers to focus on                             |
 | `assetClassSettings` | object \| null | no | Per-asset-class configuration, keyed by asset class |
 | `isPublic`      | boolean  | no       | Make publicly discoverable                            |
-| `sourceFamily`  | string \| null | no | Registered signal feed the agent opts into (family routing): `congress-ptr`, `sec-form4`, `sec-8k`, or `alpha-pro`. Omit or `null` for generic scan/TA agents. |
+| `sourceFamily`  | string \| null | no | Registered signal feed the agent opts into (family routing): `congress-ptr`, `sec-form4`, `sec-8k`, `analyst-ratings`, or `alpha-pro` (`GET /api/v1/signal-feeds` is the live registry). Omit or `null` for generic scan/TA agents. |
 
 Strategy allocation rules: the map may be sparse. Missing asset classes are saved as `0`; if the total is below `100`, the remainder is assigned to `stables`; totals above `100` are rejected with `400 Bad Request`.
 
@@ -1113,7 +1113,7 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/conversations/{conversa
 }
 ```
 
-**Widgets (rich artifacts):** an assistant message may include a `widgets` array — the rich artifacts a tool produced during the run (charts, tables, reports). Each is `{ "type": string, "data": object }`, where `type` is the renderer selector and `data` is the payload. The field is present only on messages that generated artifacts; text-only messages omit it. Known `type` values include `PriceChart`, `PerformanceCompare`, `AnalystConsensus`, `EarningsDigest`, `EarningsTimeline`, `InsiderActivity`, `NewsFeed`, `PeerComparison`, `QuarterlySeries`, `SmartMoney`, and `Analysis`; each has a payload contract in `docs/artifacts/*.md`. Treat `data` as an open bag of market/analysis data (no tenant-scoped fields).
+**Widgets (rich artifacts):** an assistant message may include a `widgets` array — the rich artifacts a tool produced during the run (charts, tables, reports). Each is `{ "type": string, "data": object }`, where `type` is the renderer selector and `data` is the payload. The field is present only on messages that generated artifacts; text-only messages omit it. Known `type` values include `PriceChart`, `PerformanceCompare`, `AnalystConsensus`, `EarningsDigest`, `EarningsTimeline`, `InsiderActivity`, `NewsFeed`, `PeerComparison`, `QuarterlySeries`, `SmartMoney`, `Analysis`, and `TokenList` (ranked token screens — trending/search results and multi-token overviews ride in `data.tokens[]` instead of a text table; read the widget or the ranked stats are lost, and label the metrics with `data.interval` — `24h` for trending/search, the requested `30m`–`24h` window for an overview). Payloads are tool-defined and may gain fields: render the keys you recognize and ignore the rest. Treat `data` as an open bag of market/analysis data (no tenant-scoped fields).
 
 **Polling pattern:**
 

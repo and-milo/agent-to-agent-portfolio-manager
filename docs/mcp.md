@@ -28,7 +28,7 @@ The MCP endpoint accepts two credentials:
 
 | Credential | Header | Who uses it | Scopes |
 |---|---|---|---|
-| Partner API key | `X-API-Key: sk_live_…` | scripts, the stdio server, existing integrations | all tools, `userId` required as before |
+| Partner API key | `X-API-Key: mk_live_…` | scripts, the stdio server, existing integrations | all tools, `userId` required as before |
 | OAuth 2.1 access token | `Authorization: Bearer mat_…` | Claude (Desktop/web/Code), ChatGPT, MCP Inspector, any client implementing the MCP authorization spec | only the tools the granted scopes cover; `userId` defaults to the signed-in user |
 
 partner-api is both the **authorization server** and the **resource server** (issuer = `https://partners.andmilo.com`, resource = `https://partners.andmilo.com/mcp`). Discovery:
@@ -46,7 +46,7 @@ Lazy auth: `initialize` and `tools/list` work without a credential. The first `t
 `WWW-Authenticate: Bearer error="invalid_token", error_description="Authentication required", resource_metadata="https://partners.andmilo.com/.well-known/oauth-protected-resource/mcp", scope="profile portfolio:read chat strategies:write offline_access"`
 — exactly what Claude/ChatGPT use to show their Connect card. A session that was opened anonymously is upgraded in place when the token arrives; once bound to a user it requires that user's token on every request. Tokens: access 1 h, refresh 30 days rotated on every use (reuse of a rotated refresh token revokes the whole connection), authorization codes single-use for 5 minutes. `Origin` is validated on `/mcp` (missing Origin = server-to-server, allowed).
 
-The same bearer token works on the REST API: `Authorization: Bearer mat_…` is accepted wherever `X-API-Key` is, scope-checked per route (see `docs/partner-api.md`).
+The same bearer token works on the REST API: `Authorization: Bearer mat_…` is accepted wherever `X-API-Key` is, scope-checked per route (see `docs/api.md`).
 
 ## OpenAI (Codex)
 

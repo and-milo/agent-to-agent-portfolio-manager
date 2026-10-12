@@ -6,7 +6,7 @@ Milo's trading engine executes swaps on Solana through [Jupiter](https://jup.ag)
 
 There is no centralized order book. No custodial exchange. Your tokens stay in your wallet until the moment a swap settles on-chain.
 
-> For the full endpoint reference, see the [Partner API docs](partner-api.md).
+> For the full endpoint reference, see the [Partner API docs](api.md).
 
 ## Architecture
 
@@ -22,7 +22,7 @@ There is no centralized order book. No custodial exchange. Your tokens stay in y
                   └────────────┘
 ```
 
-1. You create an order via the [Partner API](partner-api.md#orders) (or Milo's auto-trader creates one)
+1. You create an order via the [Partner API](api.md#orders) (or Milo's auto-trader creates one)
 2. The engine monitors trigger conditions (price thresholds)
 3. When the trigger fires, the engine requests a quote from Jupiter
 4. Jupiter finds the best route across all Solana DEXs and AMMs
@@ -43,7 +43,7 @@ Milo never takes custody of your funds.
 
 ## Order Types
 
-All orders are created through `POST /api/v1/wallets/{walletId}/orders`. The order type is determined by the combination of `type`, `trigger`, and `amount` in the payload. See the [Partner API — Orders](partner-api.md#orders) section for the full endpoint reference.
+All orders are created through `POST /api/v1/wallets/{walletId}/orders`. The order type is determined by the combination of `type`, `trigger`, and `amount` in the payload. See the [Partner API — Orders](api.md#orders) section for the full endpoint reference.
 
 ### Market Order
 
@@ -232,7 +232,7 @@ You can manage order state through the Partner API:
 - **List** — `GET /api/v1/users/{userId}/orders`
 - **Details** — `GET /api/v1/users/{userId}/orders/{orderId}`
 
-See [Partner API — Orders](partner-api.md#orders) for full details.
+See [Partner API — Orders](api.md#orders) for full details.
 
 ---
 
