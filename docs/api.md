@@ -1156,6 +1156,7 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/conversations/{c
 - Requests expire after 10 minutes. The outcome (executed with an order id or transaction signature, cancelled, or expired) arrives as the next assistant message. Only approve after your user explicitly approved the summary shown.
 - After a reply in which money actions executed, the assistant message ends with a **Receipt** block built only from the actual tool calls and results, one line per action: `Done: <action> (<order id or tx signature>)` or `Failed: <action>: <reason>`. Treat the receipt as the source of truth; when the text above it claims more, a **Correction:** line precedes the receipt.
 - `approvalRequest.status` is the request's current state when you read the page: `pending` (awaiting a decision), `approved`, `rejected`, `expired` or `superseded`. It is omitted only if the status cannot be looked up; then treat the request as pending only while it is unexpired and no later user message exists.
+- `approvalRequest` is server-reserved: a `metadata.approvalRequest` key sent by a client is dropped, and approval requests only ever appear as the top-level `approvalRequest` of assistant messages.
 - `category` is one of `swap`, `send`, `order`, `order_cancel`, `position_close`, `agent_deploy`, `agent_settings`, `stock_order`, `stock_order_cancel`, `stock_position_close`, or `unknown` (a fallback for an action the server could not classify; still show its `summary`). `approvalRequest` is omitted on all other messages.
 
 **Polling pattern:**

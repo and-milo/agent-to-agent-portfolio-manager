@@ -258,7 +258,8 @@ export interface ApprovalRequestView {
 
 /**
  * Human-readable lines for the approval requests on a get-messages page,
- * printed to stderr so stdout stays the API's JSON. Uses the server's
+ * printed to stderr so stdout stays the API's JSON. Reads only the top-level
+ * `approvalRequest` of assistant messages (server-reserved). Uses the server's
  * `approvalRequest.status` when present. Only when it is omitted does it fall
  * back to the documented rule: pending only while unexpired and no later user
  * message exists (labelled "inferred"). The server is authoritative either
@@ -273,8 +274,11 @@ export function describeApprovalRequests(
   if (!Array.isArray(messages)) return [];
   const lines: string[] = [];
   messages.forEach((msg, index) => {
-    const request = (msg as { approvalRequest?: Partial<ApprovalRequestView> } | null)
-      ?.approvalRequest;
+    // Server-reserved: only the top-level field of an assistant message is an
+    // approval request (never metadata.approvalRequest, never another role).
+    const message = msg as { role?: unknown; approvalRequest?: Partial<ApprovalRequestView> } | null;
+    if (message?.role !== 'assistant') return;
+    const request = message.approvalRequest;
     if (!request || typeof request.approvalId !== 'string') return;
     let status: string;
     let label: string;
