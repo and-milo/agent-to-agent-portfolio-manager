@@ -339,7 +339,7 @@ test('send-message forwards an approval decision with a default message', async 
   assert.equal(calls.length, 4);
 });
 
-test('describeApprovalRequests lists id, expiry and summaries with pending status', () => {
+test('describeApprovalRequests falls back to an inferred status when the server omits it', () => {
   const now = new Date('2026-10-15T10:05:00.000Z');
   const request = (approvalId: string, expiresAt: string) => ({
     approvalId,
@@ -361,16 +361,61 @@ test('describeApprovalRequests lists id, expiry and summaries with pending statu
   };
 
   const lines = describeApprovalRequests(response, 'c1', now);
-  assert.equal(lines[0], `Approval request ${older} (expires 2026-10-15T10:10:00.000Z) [no longer pending]:`);
+  assert.equal(lines[0], `Approval request ${older} (expires 2026-10-15T10:10:00.000Z) [no longer pending, inferred]:`);
   assert.equal(lines[1], '  - [send] Send 1.5 SOL to 9xQe...VFin');
-  assert.equal(lines[2], `Approval request ${expired} (expires 2026-10-15T10:00:00.000Z) [expired]:`);
-  assert.equal(lines[4], `Approval request ${APPROVAL_ID} (expires 2026-10-15T10:10:00.000Z) [pending]:`);
+  assert.equal(lines[2], `Approval request ${expired} (expires 2026-10-15T10:00:00.000Z) [expired, inferred]:`);
+  assert.equal(lines[4], `Approval request ${APPROVAL_ID} (expires 2026-10-15T10:10:00.000Z) [pending, inferred]:`);
   assert.ok(lines.includes(`  milo send-message --conversation-id c1 --approve ${APPROVAL_ID}`));
   assert.ok(lines.includes(`  milo send-message --conversation-id c1 --reject ${APPROVAL_ID}`));
   assert.ok(!lines.some((line) => line.includes(`--approve ${older}`) || line.includes(`--approve ${expired}`)));
 
   assert.deepEqual(describeApprovalRequests({ data: { messages: [{ role: 'assistant' }] } }, 'c1', now), []);
   assert.deepEqual(describeApprovalRequests(undefined, 'c1', now), []);
+});
+
+test('describeApprovalRequests prints the server status when present', () => {
+  const now = new Date('2026-10-15T10:05:00.000Z');
+  const superseded = '33333333-3333-4333-8333-333333333333';
+  const response = {
+    data: {
+      messages: [
+        {
+          messageId: 'm1',
+          role: 'assistant',
+          content: '...',
+          approvalRequest: {
+            approvalId: APPROVAL_ID,
+            expiresAt: '2026-10-15T10:10:00.000Z',
+            status: 'pending',
+            actions: [{ category: 'unknown', summary: 'Rebalance the trading account' }],
+          },
+        },
+        // A later user message would make the heuristic say "no longer pending";
+        // the server's status wins.
+        { messageId: 'm2', role: 'user', content: 'what does this do?' },
+        {
+          messageId: 'm3',
+          role: 'assistant',
+          content: '...',
+          approvalRequest: {
+            approvalId: superseded,
+            expiresAt: '2026-10-15T10:10:00.000Z',
+            status: 'superseded',
+            actions: [{ category: 'swap', summary: 'Swap 10 USDC for JUP' }],
+          },
+        },
+      ],
+      processing: false,
+    },
+  };
+
+  const lines = describeApprovalRequests(response, 'c1', now);
+  assert.equal(lines[0], `Approval request ${APPROVAL_ID} (expires 2026-10-15T10:10:00.000Z) [pending]:`);
+  assert.equal(lines[1], '  - [unknown] Rebalance the trading account');
+  assert.ok(lines.includes(`  milo send-message --conversation-id c1 --approve ${APPROVAL_ID}`));
+  assert.ok(lines.includes(`Approval request ${superseded} (expires 2026-10-15T10:10:00.000Z) [superseded]:`));
+  assert.ok(!lines.some((line) => line.includes(`--approve ${superseded}`)));
+  assert.ok(!lines.some((line) => line.includes('inferred')));
 });
 
 test('get-messages returns the API response unchanged', async () => {

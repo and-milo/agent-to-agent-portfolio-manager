@@ -243,19 +243,26 @@ export function parseApprovalFlags(
   return { approvalId: value, decision };
 }
 
+/** Current state of an approval request, resolved by the server when the page is read. */
+export type ApprovalRequestStatus = 'pending' | 'approved' | 'rejected' | 'expired' | 'superseded';
+
 /** `approvalRequest` on an assistant message (GET .../messages). */
 export interface ApprovalRequestView {
   approvalId: string;
   expiresAt: string;
+  /** Omitted only if the server could not look the status up. */
+  status?: ApprovalRequestStatus;
+  /** `category` may be `unknown` (an action the server could not classify). */
   actions: Array<{ category: string; summary: string }>;
 }
 
 /**
  * Human-readable lines for the approval requests on a get-messages page,
- * printed to stderr so stdout stays the API's JSON. `approvalRequest` is a
- * snapshot: a request is no longer pending once it expires or any later user
- * message decides or cancels it. The server is authoritative either way; an
- * id that is no longer pending executes nothing.
+ * printed to stderr so stdout stays the API's JSON. Uses the server's
+ * `approvalRequest.status` when present. Only when it is omitted does it fall
+ * back to the documented rule: pending only while unexpired and no later user
+ * message exists (labelled "inferred"). The server is authoritative either
+ * way; an id that is no longer pending executes nothing.
  */
 export function describeApprovalRequests(
   response: unknown,
@@ -269,17 +276,25 @@ export function describeApprovalRequests(
     const request = (msg as { approvalRequest?: Partial<ApprovalRequestView> } | null)
       ?.approvalRequest;
     if (!request || typeof request.approvalId !== 'string') return;
-    const expiresAtMs = Date.parse(String(request.expiresAt ?? ''));
-    const answered = messages
-      .slice(index + 1)
-      .some((later) => (later as { role?: unknown } | null)?.role === 'user');
-    const status = answered
-      ? 'no longer pending'
-      : Number.isFinite(expiresAtMs) && expiresAtMs <= now.getTime()
-        ? 'expired'
-        : 'pending';
+    let status: string;
+    let label: string;
+    if (typeof request.status === 'string' && request.status) {
+      status = request.status;
+      label = status;
+    } else {
+      const expiresAtMs = Date.parse(String(request.expiresAt ?? ''));
+      const answered = messages
+        .slice(index + 1)
+        .some((later) => (later as { role?: unknown } | null)?.role === 'user');
+      status = answered
+        ? 'no longer pending'
+        : Number.isFinite(expiresAtMs) && expiresAtMs <= now.getTime()
+          ? 'expired'
+          : 'pending';
+      label = `${status}, inferred`;
+    }
     lines.push(
-      `Approval request ${request.approvalId} (expires ${request.expiresAt ?? 'unknown'}) [${status}]:`,
+      `Approval request ${request.approvalId} (expires ${request.expiresAt ?? 'unknown'}) [${label}]:`,
     );
     for (const action of Array.isArray(request.actions) ? request.actions : []) {
       lines.push(`  - [${action?.category ?? 'unknown'}] ${action?.summary ?? ''}`);
@@ -978,7 +993,7 @@ export const COMMANDS: CommandDef[] = [
     description: '⚠️ May trigger trades: the auto-trader agent can act on the message (update autotrade settings, close positions). Money actions wait for approval: decide the agent\'s approvalRequest (see get-messages) with --approve/--reject <approvalId>; any other message cancels it, and it expires after 10 minutes. Send a message to a conversation',
     flags: [
       { name: 'conversation-id', description: 'Conversation ID', required: true },
-      { name: 'message', description: 'Message text (required unless --approve/--reject; then defaults to "approve" / "cancel")' },
+      { name: 'message', description: 'Message text (required unless --approve/--reject; then defaults to "approve" / "cancel" and is saved as your turn, but the decision comes only from the flag)' },
       { name: 'approve', description: 'approvalRequest.approvalId to approve; only after your user explicitly approved that exact action' },
       { name: 'reject', description: 'approvalRequest.approvalId to reject (nothing is executed)' },
       { name: 'user-id', description: 'User ID (default: from config)' },
@@ -1002,7 +1017,7 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'get-messages',
-    description: 'Get messages from a conversation (poll processing flag). Approval requests on the page (id, expiry, action summaries) are also printed to stderr',
+    description: 'Get messages from a conversation (poll processing flag). Approval requests on the page (id, expiry, status, action summaries) are also printed to stderr',
     flags: [
       { name: 'conversation-id', description: 'Conversation ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },

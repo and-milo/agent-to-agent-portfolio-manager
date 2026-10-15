@@ -54,7 +54,7 @@ Notes:
 - Abuse protections and request throttling are enforced. Initialize may return `429` during high load; authenticated callers (API key / OAuth grant) get a much larger initialize allowance than anonymous per-IP sessions, so per-call-session clients should authenticate on initialize. Each API key / OAuth user keeps at most 10 live MCP sessions: initializing an 11th closes that principal's least recently used session (requests on it then get an invalid-session error; re-initialize).
 - MCP sessions are bounded and idle sessions can be evicted; if a session expires, re-initialize.
 - If a session expires, sessioned calls return invalid-session errors and the client should re-initialize.
-- Tools carry a `title` and MCP annotations: read-only tools are `readOnlyHint: true`; money-moving/irreversible tools, state-replacing tools (`sync_strategy`, `update_strategy`, `pause_order`) and the conversation writes (`create_conversation`, `send_message` — the agent can update autotrade settings or close positions when asked) are `destructiveHint: true` with a leading `⚠️` warning in the description. Only signup, `create_strategy` and `claim_quest` are additive writes. Full list in `docs/mcp.md`.
+- Tools carry a `title` and MCP annotations: read-only tools are `readOnlyHint: true`; money-moving/irreversible tools, state-replacing tools (`sync_strategy`, `update_strategy`, `pause_order`) and the conversation writes (`create_conversation`, `send_message` — the agent can update autotrade settings or close positions when asked, after the user approves the agent's `approvalRequest` via `send_message` `approval`) are `destructiveHint: true` with a leading `⚠️` warning in the description. Only signup, `create_strategy` and `claim_quest` are additive writes. Full list in `docs/mcp.md`.
 - The server's `instructions` describe Milo as both a stock research product (analyst ratings, insider/congress/8-K events, fundamentals, earnings) and an autonomous trading-agent product (crypto on Solana + brokered US equities).
 - Synchronous research tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) mirror the `/api/v1/research/*` routes: market-level reads (any credential (API key or OAuth bearer, no scope needed), no userId), `readOnlyHint: true`, ticker validated (1-6 chars), `days`/`limit` clamped to 365/100, a short text summary, the same JSON serialized as a second text block (for clients that ignore `structuredContent`), and `structuredContent`. The FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) are registered only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
 
@@ -1086,6 +1086,8 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/conversations/{c
   -d '{ "message": "What about JUP?" }'
 ```
 
+Body fields: `message` (string, 1-4000 chars, required), `metadata` (object, optional, stored verbatim), and `approval` (optional) — `{ "approvalId": "<uuid from approvalRequest.approvalId>", "decision": "approve" | "reject" }` to decide a pending money-action approval. When `approval` is present, `message` is still saved as the user's turn but the decision comes only from `approval`. See "Approvals for money-moving actions" below.
+
 #### Get Messages
 
 `GET /api/v1/users/{userId}/conversations/{conversationId}/messages`
@@ -1131,6 +1133,7 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/conversations/{conversa
   "approvalRequest": {
     "approvalId": "6cf9624c-f01e-4d64-b328-64d1f77720b6",
     "expiresAt": "2026-10-15T10:10:00.000Z",
+    "status": "pending",
     "actions": [
       { "category": "send", "summary": "Send 1.5 SOL to 9xQe...VFin, from wallet ..." }
     ]
@@ -1147,7 +1150,11 @@ curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/conversations/{c
   -d '{ "message": "approve", "approval": { "approvalId": "6cf9624c-...", "decision": "approve" } }'
 ```
 
-`decision` is `approve` or `reject`. A message that is exactly `approve` / `cancel` (no `approval` field) decides the newest pending request; any other message cancels it, and nothing is executed. Requests expire after 10 minutes. The outcome (executed with an order id or transaction signature, cancelled, or expired) arrives as the next assistant message. Only approve after your user explicitly approved the summary shown. `category` is one of `swap`, `send`, `order`, `order_cancel`, `position_close`, `agent_deploy`, `agent_settings`, `stock_order`, `stock_order_cancel`, `stock_position_close`; `approvalRequest` is a snapshot and is omitted on all other messages.
+- `decision` is `approve` or `reject`. When `approval` is present, the `message` text is still saved as the user's turn, but it is not interpreted: the decision comes only from `approval`, and the agent does not answer the text. An `approvalId` that is not pending in this conversation (already decided, expired, superseded, or from another conversation) executes nothing and gets a "no pending action" reply.
+- Prefer the explicit `approval` field over passing your user's words through. Without it, a message whose whole text is one of these phrases decides the newest pending request (case, punctuation and apostrophes are ignored, a trailing "please", "thanks", "thank you" or "now" is dropped, and a message longer than 80 characters never counts). Approve: `approve`, `approved`, `i approve`, `approve it`, `yes approve`, `yes i approve`, `yes`, `yes please`, `yep`, `yeah`, `confirm`, `confirmed`, `i confirm`, `yes confirm`, `go ahead`, `yes go ahead`, `go for it`, `do it`, `yes do it`, `proceed`, `execute`, `execute it`, `ok`, `okay`, `ok go ahead`, `sure`, `send it`, `place it`, `place the order`. Reject: `cancel`, `cancel it`, `reject`, `rejected`, `i reject`, `deny`, `decline`, `no`, `nope`, `no thanks`, `no cancel`, `i do not approve`, `i dont approve`, `do not approve`, `dont approve`, `do not do it`, `dont do it`, `stop`, `abort`, `never mind`, `nevermind`. Any other message cancels the pending request (`status` becomes `superseded`) and nothing is executed.
+- Requests expire after 10 minutes. The outcome (executed with an order id or transaction signature, cancelled, or expired) arrives as the next assistant message. Only approve after your user explicitly approved the summary shown.
+- `approvalRequest.status` is the request's current state when you read the page: `pending` (awaiting a decision), `approved`, `rejected`, `expired` or `superseded`. It is omitted only if the status cannot be looked up; then treat the request as pending only while it is unexpired and no later user message exists.
+- `category` is one of `swap`, `send`, `order`, `order_cancel`, `position_close`, `agent_deploy`, `agent_settings`, `stock_order`, `stock_order_cancel`, `stock_position_close`, or `unknown` (a fallback for an action the server could not classify; still show its `summary`). `approvalRequest` is omitted on all other messages.
 
 **Polling pattern:**
 

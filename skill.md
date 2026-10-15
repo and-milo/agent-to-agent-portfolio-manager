@@ -1216,6 +1216,8 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/m
   -d '{ "message": "What about JUP?" }'
 ```
 
+Optional `approval: { "approvalId": "...", "decision": "approve" | "reject" }` decides a pending money-action approval (see "Approvals for money-moving actions" below); with it, `message` is still saved as the user's turn but the decision comes only from `approval`.
+
 #### GET /api/v1/users/{userId}/conversations/{conversationId}/messages
 Poll for messages. Check `processing` flag to know if the agent is still working.
 
@@ -1254,6 +1256,7 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/messages
   "approvalRequest": {
     "approvalId": "6cf9624c-f01e-4d64-b328-64d1f77720b6",
     "expiresAt": "2026-10-15T10:10:00.000Z",
+    "status": "pending",
     "actions": [
       { "category": "send", "summary": "Send 1.5 SOL to 9xQe...VFin, from wallet ..." }
     ]
@@ -1270,7 +1273,11 @@ curl -X POST {{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/m
   -d '{ "message": "approve", "approval": { "approvalId": "6cf9624c-...", "decision": "approve" } }'
 ```
 
-`decision` is `approve` or `reject`. A message that is exactly `approve` / `cancel` (no `approval` field) decides the newest pending request; any other message cancels it, and nothing is executed. Requests expire after 10 minutes. The outcome (executed with an order id or transaction signature, cancelled, or expired) arrives as the next assistant message. Only approve after your user explicitly approved the summary shown. `category` is one of `swap`, `send`, `order`, `order_cancel`, `position_close`, `agent_deploy`, `agent_settings`, `stock_order`, `stock_order_cancel`, `stock_position_close`; `approvalRequest` is a snapshot and is omitted on all other messages.
+- `decision` is `approve` or `reject`. When `approval` is present, the `message` text is still saved as the user's turn, but it is not interpreted: the decision comes only from `approval`, and the agent does not answer the text. An `approvalId` that is not pending in this conversation (already decided, expired, superseded, or from another conversation) executes nothing and gets a "no pending action" reply.
+- Prefer the explicit `approval` field over passing your user's words through. Without it, a message whose whole text is one of these phrases decides the newest pending request (case, punctuation and apostrophes are ignored, a trailing "please", "thanks", "thank you" or "now" is dropped, and a message longer than 80 characters never counts). Approve: `approve`, `approved`, `i approve`, `approve it`, `yes approve`, `yes i approve`, `yes`, `yes please`, `yep`, `yeah`, `confirm`, `confirmed`, `i confirm`, `yes confirm`, `go ahead`, `yes go ahead`, `go for it`, `do it`, `yes do it`, `proceed`, `execute`, `execute it`, `ok`, `okay`, `ok go ahead`, `sure`, `send it`, `place it`, `place the order`. Reject: `cancel`, `cancel it`, `reject`, `rejected`, `i reject`, `deny`, `decline`, `no`, `nope`, `no thanks`, `no cancel`, `i do not approve`, `i dont approve`, `do not approve`, `dont approve`, `do not do it`, `dont do it`, `stop`, `abort`, `never mind`, `nevermind`. Any other message cancels the pending request (`status` becomes `superseded`) and nothing is executed.
+- Requests expire after 10 minutes. The outcome (executed with an order id or transaction signature, cancelled, or expired) arrives as the next assistant message. Only approve after your user explicitly approved the summary shown.
+- `approvalRequest.status` is the request's current state when you read the page: `pending` (awaiting a decision), `approved`, `rejected`, `expired` or `superseded`. It is omitted only if the status cannot be looked up; then treat the request as pending only while it is unexpired and no later user message exists.
+- `category` is one of `swap`, `send`, `order`, `order_cancel`, `position_close`, `agent_deploy`, `agent_settings`, `stock_order`, `stock_order_cancel`, `stock_position_close`, or `unknown` (a fallback for an action the server could not classify; still show its `summary`). `approvalRequest` is omitted on all other messages.
 
 ---
 

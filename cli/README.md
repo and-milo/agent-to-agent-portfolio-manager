@@ -95,7 +95,7 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `list-conversations` | List conversations |
 | `get-conversation` | Get conversation details |
 | `send-message` | ⚠️ Send a message to a conversation (the auto-trader agent may change settings / close positions when asked); `--approve` / `--reject <approvalId>` decides a pending approval request |
-| `get-messages` | Get messages (poll `processing` flag); approval requests on the page are also printed to stderr |
+| `get-messages` | Get messages (poll `processing` flag); approval requests on the page (id, expiry, status, summaries) are also printed to stderr |
 | `diary-logs` | Get auto-trade diary logs |
 | `config` | Show or update `~/.milo/config.json` |
 
@@ -146,7 +146,7 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
   - Use `--data-sources-json null` or `--asset-class-settings-json null` on update endpoints to clear saved values.
 - Some write-heavy commands are more likely to receive `429` during bursts (for example order creation, close-all positions, and conversation writes). Build retries with backoff.
 - On `429`, respect `Retry-After` and retry only after that delay.
-- Money-moving actions requested in a conversation (swaps, token transfers, buy/sell orders, order cancels, position closes, selecting a trading agent and changing trading-agent settings; pausing auto-trading is not gated) never run straight from a message. The agent replies with an assistant message carrying `approvalRequest` (`approvalId`, `expiresAt`, `actions[]` with `category` + human `summary`) and executes only after that exact request is approved. `get-messages` prints each approval request on the page to stderr (id, expiry, action summaries, and whether it is still pending), so stdout stays the API JSON. Decide it with `send-message --approve <approvalId>` or `--reject <approvalId>` (one of them, a UUID; `--message` then defaults to `approve` / `cancel`). Requests are bound to this user and conversation, single use, and expire after 10 minutes; any other message cancels a pending request and nothing is executed. The outcome (executed with an order id or transaction signature, cancelled, or expired) arrives as the next assistant message. Only approve after your user explicitly approved the summary shown.
+- Money-moving actions requested in a conversation (swaps, token transfers, buy/sell orders, order cancels, position closes, selecting a trading agent and changing trading-agent settings; pausing auto-trading is not gated) never run straight from a message. The agent replies with an assistant message carrying `approvalRequest` (`approvalId`, `expiresAt`, `status`, `actions[]` with `category` + human `summary`; `category` may be `unknown`, still show its `summary`) and executes only after that exact request is approved. `status` is the current state when the page is read: `pending`, `approved`, `rejected`, `expired` or `superseded`. `get-messages` prints each approval request on the page to stderr (id, expiry, status, action summaries), so stdout stays the API JSON; only if the server omits `status` does it infer one (pending only while unexpired and no later user message exists) and label it `inferred`. Decide it with `send-message --approve <approvalId>` or `--reject <approvalId>` (one of them, a UUID; `--message` then defaults to `approve` / `cancel`). With either flag the message text is saved as your turn but not interpreted: the decision comes only from the flag, and an id that is no longer pending executes nothing. Prefer the flags over passing your user's words through: without them, a message whose whole text is an approve or reject phrase (for example `yes`, `ok`, `go ahead`, `no`, `stop`; full lists in `docs/api.md`) decides the newest pending request. Requests are bound to this user and conversation, single use, and expire after 10 minutes; any other message cancels a pending request (`status` becomes `superseded`) and nothing is executed. The outcome (executed with an order id or transaction signature, cancelled, or expired) arrives as the next assistant message. Only approve after your user explicitly approved the summary shown.
 - Research commands validate `--ticker` (1-6 letters/digits, `.`/`-`; upper-cased), `--days` (1-365), `--limit` (1-100; `stock-news` 1-12) and `--min-value-usd` (>= 0) locally before calling the API, mirroring the server's `400 bad_request` rules.
 
 ## Examples
@@ -200,7 +200,7 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
 # Approve (or reject) a money action the agent paused for approval.
 # The approvalId comes from approvalRequest on the assistant message.
 ./dist/milo send-message --conversation-id <uuid> --message "Close my JUP position"
-./dist/milo get-messages --conversation-id <uuid>   # stderr: approval request id, expiry, summaries
+./dist/milo get-messages --conversation-id <uuid>   # stderr: approval request id, expiry, status, summaries
 ./dist/milo send-message --conversation-id <uuid> --approve <approvalId>
 ./dist/milo send-message --conversation-id <uuid> --reject <approvalId>
 
