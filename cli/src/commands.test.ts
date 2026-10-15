@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   COMMANDS,
+  describeApprovalRequests,
+  parseApprovalFlags,
   parseModelVersionFlag,
   parseSourceFamilyFlag,
   parseFundingAmountSolFlag,
@@ -277,4 +279,107 @@ test('deploy-arena forwards fundingAmountSol; settings commands route by trading
   ]);
   await run('get-settings', {}, { user_id: 'u1' });
   assert.deepEqual(calls.at(-1), ['getAutoTradeSettings', ['u1']]);
+});
+
+const APPROVAL_ID = '6cf9624c-f01e-4d64-b328-64d1f77720b6';
+
+test('--approve / --reject take one well-formed approval id', () => {
+  assert.equal(parseApprovalFlags(undefined, undefined), undefined);
+  assert.deepEqual(parseApprovalFlags(` ${APPROVAL_ID} `, undefined), {
+    approvalId: APPROVAL_ID,
+    decision: 'approve',
+  });
+  assert.deepEqual(parseApprovalFlags(undefined, APPROVAL_ID), {
+    approvalId: APPROVAL_ID,
+    decision: 'reject',
+  });
+  assert.throws(() => parseApprovalFlags(APPROVAL_ID, APPROVAL_ID), /only one of --approve or --reject/);
+  assert.throws(() => parseApprovalFlags('true', undefined), /Missing value for --approve/);
+  assert.throws(() => parseApprovalFlags(undefined, ''), /Missing value for --reject/);
+  assert.throws(() => parseApprovalFlags('6cf9624c', undefined), /--approve must be an approval id/);
+});
+
+test('send-message forwards an approval decision with a default message', async () => {
+  const calls: Array<[string, unknown[]]> = [];
+  const client = new Proxy(
+    {},
+    {
+      get:
+        (_t, method: string) =>
+        (...args: unknown[]) => {
+          calls.push([method, args]);
+          return Promise.resolve({ data: {} });
+        },
+    },
+  ) as any;
+  const run = (flags: Record<string, string | undefined>) =>
+    COMMANDS.find((c) => c.name === 'send-message')!.handler(
+      { 'user-id': 'u1', 'conversation-id': 'c1', ...flags },
+      client,
+      {} as any,
+    );
+
+  await run({ approve: APPROVAL_ID });
+  assert.deepEqual(calls.at(-1), [
+    'sendMessage',
+    ['u1', 'c1', { message: 'approve', approval: { approvalId: APPROVAL_ID, decision: 'approve' } }, undefined],
+  ]);
+  await run({ reject: APPROVAL_ID });
+  assert.deepEqual(calls.at(-1), [
+    'sendMessage',
+    ['u1', 'c1', { message: 'cancel', approval: { approvalId: APPROVAL_ID, decision: 'reject' } }, undefined],
+  ]);
+  await run({ message: 'go ahead', approve: APPROVAL_ID });
+  assert.equal((calls.at(-1)![1][2] as any).message, 'go ahead');
+  await run({ message: 'What about JUP?' });
+  assert.deepEqual(calls.at(-1), ['sendMessage', ['u1', 'c1', { message: 'What about JUP?' }, undefined]]);
+
+  await assert.rejects(run({}), /Missing required flag --message/);
+  await assert.rejects(run({ approve: 'nope' }), /--approve must be an approval id/);
+  assert.equal(calls.length, 4);
+});
+
+test('describeApprovalRequests lists id, expiry and summaries with pending status', () => {
+  const now = new Date('2026-10-15T10:05:00.000Z');
+  const request = (approvalId: string, expiresAt: string) => ({
+    approvalId,
+    expiresAt,
+    actions: [{ category: 'send', summary: 'Send 1.5 SOL to 9xQe...VFin' }],
+  });
+  const older = '11111111-1111-4111-8111-111111111111';
+  const expired = '22222222-2222-4222-8222-222222222222';
+  const response = {
+    data: {
+      messages: [
+        { messageId: 'm1', role: 'assistant', content: '...', approvalRequest: request(older, '2026-10-15T10:10:00.000Z') },
+        { messageId: 'm2', role: 'user', content: 'cancel' },
+        { messageId: 'm3', role: 'assistant', content: '...', approvalRequest: request(expired, '2026-10-15T10:00:00.000Z') },
+        { messageId: 'm4', role: 'assistant', content: '...', approvalRequest: request(APPROVAL_ID, '2026-10-15T10:10:00.000Z') },
+      ],
+      processing: false,
+    },
+  };
+
+  const lines = describeApprovalRequests(response, 'c1', now);
+  assert.equal(lines[0], `Approval request ${older} (expires 2026-10-15T10:10:00.000Z) [no longer pending]:`);
+  assert.equal(lines[1], '  - [send] Send 1.5 SOL to 9xQe...VFin');
+  assert.equal(lines[2], `Approval request ${expired} (expires 2026-10-15T10:00:00.000Z) [expired]:`);
+  assert.equal(lines[4], `Approval request ${APPROVAL_ID} (expires 2026-10-15T10:10:00.000Z) [pending]:`);
+  assert.ok(lines.includes(`  milo send-message --conversation-id c1 --approve ${APPROVAL_ID}`));
+  assert.ok(lines.includes(`  milo send-message --conversation-id c1 --reject ${APPROVAL_ID}`));
+  assert.ok(!lines.some((line) => line.includes(`--approve ${older}`) || line.includes(`--approve ${expired}`)));
+
+  assert.deepEqual(describeApprovalRequests({ data: { messages: [{ role: 'assistant' }] } }, 'c1', now), []);
+  assert.deepEqual(describeApprovalRequests(undefined, 'c1', now), []);
+});
+
+test('get-messages returns the API response unchanged', async () => {
+  const response = { data: { messages: [{ messageId: 'm1', role: 'assistant', content: 'hi' }], processing: false } };
+  const client = { getMessages: async () => response } as any;
+  const result = await COMMANDS.find((c) => c.name === 'get-messages')!.handler(
+    { 'user-id': 'u1', 'conversation-id': 'c1' },
+    client,
+    {} as any,
+  );
+  assert.equal(result, response);
 });

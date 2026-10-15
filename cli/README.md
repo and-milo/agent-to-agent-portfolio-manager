@@ -22,7 +22,7 @@ The build produces `dist/milo` — a self-contained executable.
 
 The same partner-api server exposes MCP on `/mcp` (Streamable HTTP).  
 `POST /mcp` initialize accepts optional `X-API-Key` or an OAuth 2.1 bearer token (`Authorization: Bearer mat_…`; discovery at `/.well-known/oauth-authorization-server`, consent with your Solana wallet). Without either, MCP is limited to signup/public tools and `tools/list` until `signup` returns an API key or the first protected `tools/call` (anything beyond the public signup tools) triggers the OAuth `401` challenge. The CLI itself keeps using API keys. The key `signup` returns is bound to that MCP session only: clients that open a new session per tool call must send it as `X-API-Key` on every request. Throttling and session-capacity protections are enforced (authenticated callers get a larger initialize allowance than anonymous per-IP sessions), so initialize can return `429`. Respect `Retry-After` before retrying and re-initialize after invalid-session errors.  
-MCP tools are annotated read-only vs destructive: money-moving/irreversible tools, state-replacing tools (`sync_strategy`, `update_strategy`, `pause_order`) and the conversation writes (`create_conversation`, `send_message` — the agent can update autotrade settings or close positions when asked) carry `destructiveHint: true` and a ⚠️ warning in the description; only signup, `create_strategy` and `claim_quest` are additive writes. The matching CLI commands (`pause-order`, `update-strategy`, `sync-strategy`, `create-conversation`, `send-message`) carry the same ⚠️ in their help text — confirm before running them; see `docs/mcp.md`.  
+MCP tools are annotated read-only vs destructive: money-moving/irreversible tools, state-replacing tools (`sync_strategy`, `update_strategy`, `pause_order`) and the conversation writes (`create_conversation`, `send_message` — the agent can update autotrade settings or close positions when asked, after the user approves its `approvalRequest`) carry `destructiveHint: true` and a ⚠️ warning in the description; only signup, `create_strategy` and `claim_quest` are additive writes. The matching CLI commands (`pause-order`, `update-strategy`, `sync-strategy`, `create-conversation`, `send-message`) carry the same ⚠️ in their help text — confirm before running them; see `docs/mcp.md`.  
 This CLI continues to use the REST endpoints directly.
 
 Research endpoints (`GET /api/v1/research/*`, API key or OAuth bearer, no user id) are available over REST, as synchronous MCP tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) and as the CLI commands under "Stock research" below.
@@ -94,8 +94,8 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `create-conversation` | ⚠️ Start a conversation with Milo AI (the auto-trader agent may change settings / close positions when asked) |
 | `list-conversations` | List conversations |
 | `get-conversation` | Get conversation details |
-| `send-message` | ⚠️ Send a message to a conversation (the auto-trader agent may change settings / close positions when asked) |
-| `get-messages` | Get messages (poll `processing` flag) |
+| `send-message` | ⚠️ Send a message to a conversation (the auto-trader agent may change settings / close positions when asked); `--approve` / `--reject <approvalId>` decides a pending approval request |
+| `get-messages` | Get messages (poll `processing` flag); approval requests on the page are also printed to stderr |
 | `diary-logs` | Get auto-trade diary logs |
 | `config` | Show or update `~/.milo/config.json` |
 
@@ -146,6 +146,7 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
   - Use `--data-sources-json null` or `--asset-class-settings-json null` on update endpoints to clear saved values.
 - Some write-heavy commands are more likely to receive `429` during bursts (for example order creation, close-all positions, and conversation writes). Build retries with backoff.
 - On `429`, respect `Retry-After` and retry only after that delay.
+- Money-moving actions requested in a conversation (swaps, token transfers, buy/sell orders, order cancels, position closes, selecting a trading agent and changing trading-agent settings; pausing auto-trading is not gated) never run straight from a message. The agent replies with an assistant message carrying `approvalRequest` (`approvalId`, `expiresAt`, `actions[]` with `category` + human `summary`) and executes only after that exact request is approved. `get-messages` prints each approval request on the page to stderr (id, expiry, action summaries, and whether it is still pending), so stdout stays the API JSON. Decide it with `send-message --approve <approvalId>` or `--reject <approvalId>` (one of them, a UUID; `--message` then defaults to `approve` / `cancel`). Requests are bound to this user and conversation, single use, and expire after 10 minutes; any other message cancels a pending request and nothing is executed. The outcome (executed with an order id or transaction signature, cancelled, or expired) arrives as the next assistant message. Only approve after your user explicitly approved the summary shown.
 - Research commands validate `--ticker` (1-6 letters/digits, `.`/`-`; upper-cased), `--days` (1-365), `--limit` (1-100; `stock-news` 1-12) and `--min-value-usd` (>= 0) locally before calling the API, mirroring the server's `400 bad_request` rules.
 
 ## Examples
@@ -195,6 +196,13 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
 ./dist/milo create-conversation --message "Analyze SOL price action" --agent-type market-analyst
 ./dist/milo create-conversation --message "What are BTC funding and open interest on Hyperliquid, and the Kalshi odds for the October Fed decision?"
 ./dist/milo get-messages --conversation-id <uuid>
+
+# Approve (or reject) a money action the agent paused for approval.
+# The approvalId comes from approvalRequest on the assistant message.
+./dist/milo send-message --conversation-id <uuid> --message "Close my JUP position"
+./dist/milo get-messages --conversation-id <uuid>   # stderr: approval request id, expiry, summaries
+./dist/milo send-message --conversation-id <uuid> --approve <approvalId>
+./dist/milo send-message --conversation-id <uuid> --reject <approvalId>
 
 # Send tokens — funded from --wallet-id (defaults to config.wallet_id).
 # The named wallet is authoritative: no other wallet of yours is debited.

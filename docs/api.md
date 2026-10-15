@@ -1120,6 +1120,35 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/conversations/{conversa
 
 **Widgets (rich artifacts):** an assistant message may include a `widgets` array — the rich artifacts a tool produced during the run (charts, tables, reports). Each is `{ "type": string, "data": object }`, where `type` is the renderer selector and `data` is the payload. The field is present only on messages that generated artifacts; text-only messages omit it. Known `type` values include `PriceChart`, `PerformanceCompare`, `AnalystConsensus`, `EarningsDigest`, `EarningsTimeline`, `InsiderActivity`, `NewsFeed`, `PeerComparison`, `QuarterlySeries`, `SmartMoney`, `Analysis`, and `TokenList` (ranked token screens — trending/search results and multi-token overviews ride in `data.tokens[]` instead of a text table; read the widget or the ranked stats are lost, and label the metrics with `data.interval` — `24h` for trending/search, the requested `30m`–`24h` window for an overview). Payloads are tool-defined and may gain fields: render the keys you recognize and ignore the rest. Treat `data` as an open bag of market/analysis data (no tenant-scoped fields).
 
+**Approvals for money-moving actions.** A conversation agent never executes a money-moving action straight from a message: swaps, token transfers, buy/sell orders, order cancels, position closes, selecting a trading agent and changing trading-agent settings (pausing auto-trading is not gated). Instead it replies with an assistant message that carries an `approvalRequest` and executes only after the user approves that exact action:
+
+```json
+{
+  "messageId": "...",
+  "role": "assistant",
+  "content": "**Approval needed.** I'm ready to execute this action: ...",
+  "createdAt": "...",
+  "approvalRequest": {
+    "approvalId": "6cf9624c-f01e-4d64-b328-64d1f77720b6",
+    "expiresAt": "2026-10-15T10:10:00.000Z",
+    "actions": [
+      { "category": "send", "summary": "Send 1.5 SOL to 9xQe...VFin, from wallet ..." }
+    ]
+  }
+}
+```
+
+Show the `summary` lines to your user. To decide, send a follow-up message with `approval` (bound to this user and this conversation, single use):
+
+```bash
+curl -X POST https://partners.andmilo.com/api/v1/users/{userId}/conversations/{conversationId}/messages \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "message": "approve", "approval": { "approvalId": "6cf9624c-...", "decision": "approve" } }'
+```
+
+`decision` is `approve` or `reject`. A message that is exactly `approve` / `cancel` (no `approval` field) decides the newest pending request; any other message cancels it, and nothing is executed. Requests expire after 10 minutes. The outcome (executed with an order id or transaction signature, cancelled, or expired) arrives as the next assistant message. Only approve after your user explicitly approved the summary shown. `category` is one of `swap`, `send`, `order`, `order_cancel`, `position_close`, `agent_deploy`, `agent_settings`, `stock_order`, `stock_order_cancel`, `stock_position_close`; `approvalRequest` is a snapshot and is omitted on all other messages.
+
 **Polling pattern:**
 
 1. Send a message (POST)

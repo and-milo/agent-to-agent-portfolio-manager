@@ -170,7 +170,7 @@ The partner API server exposes MCP on the same host at `/mcp` using Streamable H
 
 For sessioned requests after initialize, send `Mcp-Session-Id`.
 
-MCP tools carry a `title` and MCP annotations. Read-only tools are `readOnlyHint: true`. Money-moving or irreversible tools (`close_position`, `close_all_positions`, `create_order`, `activate_order`, `delete_order`, `send_tokens`, `update_autotrade_settings`, `update_account_autotrade_settings`, `delete_strategy`, `deploy_arena_strategy`, `withdraw_arena_strategy`), state-replacing tools (`sync_strategy` replaces the live account's allocation/instructions, `update_strategy` overwrites saved fields, `pause_order` can disable an active stop-loss) and the conversation writes (`create_conversation`, `send_message` — the answering agent can update autotrade settings or close positions when the message asks for it) are `destructiveHint: true` with a leading ⚠️ warning in their description — confirm with the user before calling them. Only `prepare_signup_message`, `signup`, `create_strategy` and `claim_quest` are additive (`destructiveHint: false`) writes. The server's `instructions` describe Milo as both a stock research product (analyst ratings, insider/congress/8-K events, fundamentals, earnings) and an autonomous trading-agent product (crypto on Solana + brokered US equities); see `docs/mcp.md`.
+MCP tools carry a `title` and MCP annotations. Read-only tools are `readOnlyHint: true`. Money-moving or irreversible tools (`close_position`, `close_all_positions`, `create_order`, `activate_order`, `delete_order`, `send_tokens`, `update_autotrade_settings`, `update_account_autotrade_settings`, `delete_strategy`, `deploy_arena_strategy`, `withdraw_arena_strategy`), state-replacing tools (`sync_strategy` replaces the live account's allocation/instructions, `update_strategy` overwrites saved fields, `pause_order` can disable an active stop-loss) and the conversation writes (`create_conversation`, `send_message` — the answering agent can update autotrade settings or close positions when the message asks for it, after the user approves the agent's `approvalRequest` via `send_message` `approval`) are `destructiveHint: true` with a leading ⚠️ warning in their description — confirm with the user before calling them. Only `prepare_signup_message`, `signup`, `create_strategy` and `claim_quest` are additive (`destructiveHint: false`) writes. The server's `instructions` describe Milo as both a stock research product (analyst ratings, insider/congress/8-K events, fundamentals, earnings) and an autonomous trading-agent product (crypto on Solana + brokered US equities); see `docs/mcp.md`.
 
 Synchronous research tools — `get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events` — mirror `GET /api/v1/research/*` (any credential (API key or OAuth bearer, no scope needed), no userId; `readOnlyHint: true`; ticker validated, `days`/`limit` clamped; a text summary, the same JSON serialized as a second text block for clients that ignore `structuredContent`, and `structuredContent`). FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) appear only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
 
@@ -1242,6 +1242,35 @@ curl "{{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/messages
 1. Send a message (POST).
 2. Poll GET messages every 2-3 seconds.
 3. When `processing` is `false`, the agent has finished responding.
+
+**Approvals for money-moving actions.** A conversation agent never executes a money-moving action straight from a message: swaps, token transfers, buy/sell orders, order cancels, position closes, selecting a trading agent and changing trading-agent settings (pausing auto-trading is not gated). Instead it replies with an assistant message that carries an `approvalRequest` and executes only after the user approves that exact action:
+
+```json
+{
+  "messageId": "...",
+  "role": "assistant",
+  "content": "**Approval needed.** I'm ready to execute this action: ...",
+  "createdAt": "...",
+  "approvalRequest": {
+    "approvalId": "6cf9624c-f01e-4d64-b328-64d1f77720b6",
+    "expiresAt": "2026-10-15T10:10:00.000Z",
+    "actions": [
+      { "category": "send", "summary": "Send 1.5 SOL to 9xQe...VFin, from wallet ..." }
+    ]
+  }
+}
+```
+
+Show the `summary` lines to your user. To decide, send a follow-up message with `approval` (bound to this user and this conversation, single use):
+
+```bash
+curl -X POST {{BASE_URL}}/api/v1/users/{userId}/conversations/{conversationId}/messages \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{ "message": "approve", "approval": { "approvalId": "6cf9624c-...", "decision": "approve" } }'
+```
+
+`decision` is `approve` or `reject`. A message that is exactly `approve` / `cancel` (no `approval` field) decides the newest pending request; any other message cancels it, and nothing is executed. Requests expire after 10 minutes. The outcome (executed with an order id or transaction signature, cancelled, or expired) arrives as the next assistant message. Only approve after your user explicitly approved the summary shown. `category` is one of `swap`, `send`, `order`, `order_cancel`, `position_close`, `agent_deploy`, `agent_settings`, `stock_order`, `stock_order_cancel`, `stock_position_close`; `approvalRequest` is a snapshot and is omitted on all other messages.
 
 ---
 

@@ -589,7 +589,10 @@ export class PartnerApiClient {
   sendMessage(
     userId: string,
     conversationId: string,
-    body: { message: string },
+    body: {
+      message: string;
+      approval?: { approvalId: string; decision: 'approve' | 'reject' };
+    },
     overagePayment?: ConversationOveragePaymentOpts,
   ) {
     return this.requestWithOptionalOveragePayment(

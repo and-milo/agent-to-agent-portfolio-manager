@@ -211,6 +211,90 @@ export function parseFundingAmountSolFlag(value: string | undefined): number | u
   return n;
 }
 
+// Approvals (POST .../messages `approval`) — mirrors the partner API's zod
+// schema: approvalId is a UUID (approvalRequest.approvalId on the assistant
+// message), decision is approve | reject.
+const APPROVAL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type ApprovalDecision = 'approve' | 'reject';
+
+/**
+ * --approve <approvalId> / --reject <approvalId>: at most one of them, and
+ * the value must be a well-formed approval id. Returns the request body's
+ * `approval`, or undefined when neither flag is present.
+ */
+export function parseApprovalFlags(
+  approve: string | undefined,
+  reject: string | undefined,
+): { approvalId: string; decision: ApprovalDecision } | undefined {
+  if (approve !== undefined && reject !== undefined) {
+    throw new Error('Use only one of --approve or --reject');
+  }
+  const decision: ApprovalDecision | undefined =
+    approve !== undefined ? 'approve' : reject !== undefined ? 'reject' : undefined;
+  if (!decision) return undefined;
+  const value = (decision === 'approve' ? approve : reject)!.trim();
+  if (!value || value === 'true') {
+    throw new Error(`Missing value for --${decision} (the approvalRequest.approvalId to decide)`);
+  }
+  if (!APPROVAL_ID_PATTERN.test(value)) {
+    throw new Error(`--${decision} must be an approval id (UUID) from approvalRequest.approvalId`);
+  }
+  return { approvalId: value, decision };
+}
+
+/** `approvalRequest` on an assistant message (GET .../messages). */
+export interface ApprovalRequestView {
+  approvalId: string;
+  expiresAt: string;
+  actions: Array<{ category: string; summary: string }>;
+}
+
+/**
+ * Human-readable lines for the approval requests on a get-messages page,
+ * printed to stderr so stdout stays the API's JSON. `approvalRequest` is a
+ * snapshot: a request is no longer pending once it expires or any later user
+ * message decides or cancels it. The server is authoritative either way; an
+ * id that is no longer pending executes nothing.
+ */
+export function describeApprovalRequests(
+  response: unknown,
+  conversationId: string,
+  now: Date = new Date(),
+): string[] {
+  const messages = (response as { data?: { messages?: unknown } } | undefined)?.data?.messages;
+  if (!Array.isArray(messages)) return [];
+  const lines: string[] = [];
+  messages.forEach((msg, index) => {
+    const request = (msg as { approvalRequest?: Partial<ApprovalRequestView> } | null)
+      ?.approvalRequest;
+    if (!request || typeof request.approvalId !== 'string') return;
+    const expiresAtMs = Date.parse(String(request.expiresAt ?? ''));
+    const answered = messages
+      .slice(index + 1)
+      .some((later) => (later as { role?: unknown } | null)?.role === 'user');
+    const status = answered
+      ? 'no longer pending'
+      : Number.isFinite(expiresAtMs) && expiresAtMs <= now.getTime()
+        ? 'expired'
+        : 'pending';
+    lines.push(
+      `Approval request ${request.approvalId} (expires ${request.expiresAt ?? 'unknown'}) [${status}]:`,
+    );
+    for (const action of Array.isArray(request.actions) ? request.actions : []) {
+      lines.push(`  - [${action?.category ?? 'unknown'}] ${action?.summary ?? ''}`);
+    }
+    if (status === 'pending') {
+      lines.push(
+        '  Only approve after your user explicitly approved these actions:',
+        `  milo send-message --conversation-id ${conversationId} --approve ${request.approvalId}`,
+        `  milo send-message --conversation-id ${conversationId} --reject ${request.approvalId}`,
+      );
+    }
+  });
+  return lines;
+}
+
 /** Signal-feed keys a strategy can opt into (partner-api SOURCE_FAMILY_FEEDS). */
 export const SOURCE_FAMILY_FEEDS = [
   'alpha-pro',
@@ -891,10 +975,12 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'send-message',
-    description: '⚠️ May trigger trades: the auto-trader agent can act on the message (update autotrade settings, close positions). Send a message to a conversation',
+    description: '⚠️ May trigger trades: the auto-trader agent can act on the message (update autotrade settings, close positions). Money actions wait for approval: decide the agent\'s approvalRequest (see get-messages) with --approve/--reject <approvalId>; any other message cancels it, and it expires after 10 minutes. Send a message to a conversation',
     flags: [
       { name: 'conversation-id', description: 'Conversation ID', required: true },
-      { name: 'message', description: 'Message text', required: true },
+      { name: 'message', description: 'Message text (required unless --approve/--reject; then defaults to "approve" / "cancel")' },
+      { name: 'approve', description: 'approvalRequest.approvalId to approve; only after your user explicitly approved that exact action' },
+      { name: 'reject', description: 'approvalRequest.approvalId to reject (nothing is executed)' },
       { name: 'user-id', description: 'User ID (default: from config)' },
       { name: 'pay-overage', description: 'Legacy conversation-write retry helper (default: false)' },
       { name: 'payment-asset', description: 'Asset hint for --pay-overage legacy flow: USDC or SOL (default: USDC)' },
@@ -903,15 +989,20 @@ export const COMMANDS: CommandDef[] = [
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
       const conversationId = requireFlag(flags, 'conversation-id');
+      const approval = parseApprovalFlags(flags['approve'], flags['reject']);
+      const defaultMessage = approval
+        ? approval.decision === 'approve' ? 'approve' : 'cancel'
+        : undefined;
       return client.sendMessage(userId, conversationId, {
-        message: requireFlag(flags, 'message'),
+        message: requireFlag(flags, 'message', defaultMessage),
+        ...(approval ? { approval } : {}),
       }, buildOveragePaymentOpts(flags));
     },
   },
 
   {
     name: 'get-messages',
-    description: 'Get messages from a conversation (poll processing flag)',
+    description: 'Get messages from a conversation (poll processing flag). Approval requests on the page (id, expiry, action summaries) are also printed to stderr',
     flags: [
       { name: 'conversation-id', description: 'Conversation ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
@@ -922,10 +1013,13 @@ export const COMMANDS: CommandDef[] = [
       const userId = requireFlag(flags, 'user-id', config.user_id);
       const conversationId = requireFlag(flags, 'conversation-id');
       validatePagingFlags(flags['page'], flags['page-size']);
-      return client.getMessages(userId, conversationId, {
+      const response = await client.getMessages(userId, conversationId, {
         page: flags['page'],
         pageSize: flags['page-size'],
       });
+      const approvalLines = describeApprovalRequests(response, conversationId);
+      if (approvalLines.length) process.stderr.write(`${approvalLines.join('\n')}\n`);
+      return response;
     },
   },
 
