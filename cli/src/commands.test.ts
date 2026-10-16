@@ -361,10 +361,16 @@ test('describeApprovalRequests falls back to an inferred status when the server 
   };
 
   const lines = describeApprovalRequests(response, 'c1', now);
-  assert.equal(lines[0], `Approval request ${older} (expires 2026-10-15T10:10:00.000Z) [no longer pending, inferred]:`);
-  assert.equal(lines[1], '  - [send] Send 1.5 SOL to 9xQe...VFin');
-  assert.equal(lines[2], `Approval request ${expired} (expires 2026-10-15T10:00:00.000Z) [expired, inferred]:`);
-  assert.equal(lines[4], `Approval request ${APPROVAL_ID} (expires 2026-10-15T10:10:00.000Z) [pending, inferred]:`);
+  const setupNote =
+    '  No status from the server: the request may still be being set up (it cannot be decided yet); run get-messages again.';
+  assert.deepEqual(lines.slice(0, 3), [
+    `Approval request ${older} (expires 2026-10-15T10:10:00.000Z) [no longer pending, inferred]:`,
+    '  - [send] Send 1.5 SOL to 9xQe...VFin',
+    setupNote,
+  ]);
+  assert.equal(lines[3], `Approval request ${expired} (expires 2026-10-15T10:00:00.000Z) [expired, inferred]:`);
+  assert.equal(lines[6], `Approval request ${APPROVAL_ID} (expires 2026-10-15T10:10:00.000Z) [pending, inferred]:`);
+  assert.equal(lines.filter((line) => line === setupNote).length, 3);
   assert.ok(lines.includes(`  milo send-message --conversation-id c1 --approve ${APPROVAL_ID}`));
   assert.ok(lines.includes(`  milo send-message --conversation-id c1 --reject ${APPROVAL_ID}`));
   assert.ok(!lines.some((line) => line.includes(`--approve ${older}`) || line.includes(`--approve ${expired}`)));
@@ -415,7 +421,7 @@ test('describeApprovalRequests prints the server status when present', () => {
   assert.ok(lines.includes(`  milo send-message --conversation-id c1 --approve ${APPROVAL_ID}`));
   assert.ok(lines.includes(`Approval request ${superseded} (expires 2026-10-15T10:10:00.000Z) [superseded]:`));
   assert.ok(!lines.some((line) => line.includes(`--approve ${superseded}`)));
-  assert.ok(!lines.some((line) => line.includes('inferred')));
+  assert.ok(!lines.some((line) => line.includes('inferred') || line.includes('No status from the server')));
 });
 
 test('describeApprovalRequests reads only the top-level approvalRequest of assistant messages', () => {

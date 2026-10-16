@@ -262,7 +262,8 @@ export interface ApprovalRequestView {
  * `approvalRequest` of assistant messages (server-reserved). Uses the server's
  * `approvalRequest.status` when present. Only when it is omitted does it fall
  * back to the documented rule: pending only while unexpired and no later user
- * message exists (labelled "inferred"). The server is authoritative either
+ * message exists (labelled "inferred"), noting that the server omits status
+ * for a moment while a new request is being set up. The server is authoritative either
  * way; an id that is no longer pending executes nothing.
  */
 export function describeApprovalRequests(
@@ -282,8 +283,9 @@ export function describeApprovalRequests(
     if (!request || typeof request.approvalId !== 'string') return;
     let status: string;
     let label: string;
-    if (typeof request.status === 'string' && request.status) {
-      status = request.status;
+    const inferred = !(typeof request.status === 'string' && request.status);
+    if (!inferred) {
+      status = request.status as string;
       label = status;
     } else {
       const expiresAtMs = Date.parse(String(request.expiresAt ?? ''));
@@ -302,6 +304,11 @@ export function describeApprovalRequests(
     );
     for (const action of Array.isArray(request.actions) ? request.actions : []) {
       lines.push(`  - [${action?.category ?? 'unknown'}] ${action?.summary ?? ''}`);
+    }
+    if (inferred) {
+      lines.push(
+        '  No status from the server: the request may still be being set up (it cannot be decided yet); run get-messages again.',
+      );
     }
     if (status === 'pending') {
       lines.push(
