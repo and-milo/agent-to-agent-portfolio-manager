@@ -99,6 +99,8 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `diary-logs` | Get auto-trade diary logs |
 | `config` | Show or update `~/.milo/config.json` |
 
+`signal-feeds`, `decisions` and `diary-logs` only show partner-visible signal feeds: decisions and diary entries from internal feeds are excluded from both the items and the totals.
+
 ### Stock research (API key, no user id)
 
 The CLI authenticates with an API key (`--api-key` / `MILO_API_KEY`, sent as `X-API-Key`). The underlying REST routes and MCP tools also accept an OAuth bearer, but the CLI does not send one.
