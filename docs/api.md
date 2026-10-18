@@ -482,6 +482,8 @@ decisions and forward-return scoring but never places an order. Promotion is a r
 platform change, not a per-account toggle. `thresholds` are the deterministic gate params
 applied before an LLM ever sees the candidate.
 
+Only partner-visible signal feeds appear in `/signal-feeds`, `/decisions` and diary logs: decisions and diary entries from internal feeds are excluded from both the items and the totals.
+
 ---
 
 ### Research
