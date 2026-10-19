@@ -174,6 +174,10 @@ MCP tools carry a `title` and MCP annotations. Read-only tools are `readOnlyHint
 
 Synchronous research tools — `get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events` — mirror `GET /api/v1/research/*` (any credential (API key or OAuth bearer, no scope needed), no userId; `readOnlyHint: true`; ticker validated, `days`/`limit` clamped; a text summary, the same JSON serialized as a second text block for clients that ignore `structuredContent`, and `structuredContent`). FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) appear only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
 
+### Research-only MCP surface
+
+The same host also exposes a research-only MCP endpoint at `{{BASE_URL}}/mcp/research` (same Streamable HTTP methods). It serves ONLY the synchronous research tools above (serverInfo name `milo-research`; the FMP-derived tools appear under the same `MCP_LICENSED_RESEARCH_TOOLS` flag) and **no credential of any kind** — no signup, account, wallet, order, strategy, arena, quest or conversation tools exist on it, inbound `X-API-Key`/bearer headers are ignored, and the server fulfils calls with its own server-held key. Use it for public stock-research integrations (e.g. assistant directories) where no account linkage is wanted; every caller shares the per-IP initialize rate limit and one server-side REST budget, so for higher-volume or account-aware use connect to `/mcp` instead.
+
 ## Wallet & Deposits
 
 Milo creates a **non-custodial** Solana wallet for each user via Turnkey. The wallet-creating account is the owner; Milo receives delegated permission for trading.

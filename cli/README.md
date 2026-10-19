@@ -27,6 +27,8 @@ This CLI continues to use the REST endpoints directly.
 
 Research endpoints (`GET /api/v1/research/*`, API key or OAuth bearer, no user id) are available over REST, as synchronous MCP tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) and as the CLI commands under "Stock research" below.
 
+The same research tools are also served on a separate research-only MCP endpoint, `/mcp/research`, that needs no credential (no signup, account or trading tools; inbound keys are ignored; see `docs/mcp.md`). The CLI does not use it: its research commands call the REST routes with your API key.
+
 ## Authentication
 
 Three ways to provide credentials (in order of precedence):

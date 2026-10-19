@@ -58,6 +58,14 @@ Notes:
 - The server's `instructions` describe Milo as both a stock research product (analyst ratings, insider/congress/8-K events, fundamentals, earnings) and an autonomous trading-agent product (crypto on Solana + brokered US equities).
 - Synchronous research tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) mirror the `/api/v1/research/*` routes: market-level reads (any credential (API key or OAuth bearer, no scope needed), no userId), `readOnlyHint: true`, ticker validated (1-6 chars), `days`/`limit` clamped to 365/100, a short text summary, the same JSON serialized as a second text block (for clients that ignore `structuredContent`), and `structuredContent`. The FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) are registered only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
 
+### Research-only MCP endpoint (`/mcp/research`)
+
+The same host exposes a second, research-only MCP endpoint at `/mcp/research` (same Streamable HTTP methods and session semantics):
+
+- Serves ONLY the synchronous research tools (serverInfo name `milo-research`); the FMP-derived tools appear under the same `MCP_LICENSED_RESEARCH_TOOLS` flag. No signup, account, wallet, order, strategy, arena, quest or conversation tools exist on this surface.
+- No credential is needed — or accepted: inbound `X-API-Key` / bearer headers are ignored, every session is anonymous, and the server fulfils calls with its own server-held key. The endpoint has its own session pool, separate from `/mcp`.
+- The per-IP initialize rate limit applies to every caller, and all callers share one server-side REST rate budget — intended for public, low-volume integrations (assistant directories); use `/mcp` with your own credential for higher throughput or account features.
+
 Client setup examples (OpenAI Codex + Claude Desktop): see `docs/mcp.md`.
 
 ## Quick Start

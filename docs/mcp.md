@@ -4,7 +4,8 @@ This guide shows how to connect Milo's MCP server in OpenAI tools and Claude.
 
 ## Endpoint
 
-- `https://partners.andmilo.com/mcp`
+- `https://partners.andmilo.com/mcp` — the full Partner API surface (this guide)
+- `https://partners.andmilo.com/mcp/research` — research-only surface, no credential (see below)
 
 ## What the server exposes
 
@@ -25,6 +26,17 @@ This guide shows how to connect Milo's MCP server in OpenAI tools and Claude.
 - Research tools never surface raw errors: API errors map to the API's message, anything else to a generic "temporarily unavailable" line. On the licensed tools a provider outage surfaces as the API's `503 provider_unavailable` message ("temporarily unavailable … retry shortly") — distinct from `404` "no … found for TICKER", which means the provider answered and has no data. Retry the former; do not retry the latter.
 - Only partner-visible signal feeds appear in `/signal-feeds`, `/decisions` and diary logs: decisions and diary entries from internal feeds are excluded from both the items and the totals.
 - Legal & support links are included in the instructions: `https://andmilo.com/privacy-policy`, `https://andmilo.com/terms-and-conditions`, `https://docs.andmilo.com`.
+
+## Research-only endpoint: `/mcp/research`
+
+A second MCP surface for public stock-research integrations (assistant directories, demos) where no account linkage is wanted:
+
+- Server identity: `milo-research` — title "milo — stock research". Same Streamable HTTP methods and session semantics as `/mcp`.
+- Serves ONLY the synchronous research tools (plus the FMP-derived ones under the same `MCP_LICENSED_RESEARCH_TOOLS` flag). No signup, account, wallet, order, strategy, arena, quest or conversation tools exist on this surface — it cannot read personal data, place trades, move funds, or change any account state.
+- **No authentication** — and none accepted: inbound `X-API-Key` / `Authorization` headers are ignored and every session is anonymous. The server fulfils calls with its own server-held key, and the endpoint has its own session pool, separate from `/mcp`.
+- The per-IP initialize rate limit applies to every caller, and all callers share one server-side REST budget — for higher throughput or account features, use `/mcp` with your own credential.
+
+Quick verify: `curl -s -X POST https://partners.andmilo.com/mcp/research -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'` — the response identifies `milo-research` and sets `Mcp-Session-Id`.
 
 ## Authentication: API key or OAuth 2.1
 
