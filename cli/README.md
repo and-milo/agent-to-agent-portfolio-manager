@@ -138,7 +138,8 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
   - Use `--model-version null` to clear preferred model.
   - OpenAI canonical model ids are `gpt-5.6-terra` (the default), `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
   - OpenAI ids are provider-neutral. Pass canonical ids to the CLI; Azure deployment names are server-managed and are rejected as model ids.
-  - Anthropic canonical model ids are `claude-opus-4.5` and `claude-opus-4.6`.
+  - The Anthropic canonical model id is `claude-sonnet-5.5` (Pro and Max).
+  - `claude-opus-4.5` and `claude-opus-4.6` are retired: the CLI sends `claude-sonnet-5.5` instead (and says so on stderr), which is also what the API saves if it receives a retired id.
   - Gemini canonical model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
   - Grok canonical model ids are `grok-4.1-fast-reasoning` and `grok-4`.
 - `update-settings`, `create-strategy`, `update-strategy`, and `sync-strategy` enforce `dataSources` entitlement.
@@ -180,7 +181,7 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
   --is-active true \
   --risk-tolerance balanced \
   --strategy "SWING TRADER" \
-  --model-version claude-opus-4.5 \
+  --model-version claude-sonnet-5.5 \
   --allocation-json '{"majors":40,"memes":20,"stables":30,"native":10}'
 
 # Add paid data-source settings with per-asset overrides
