@@ -351,7 +351,8 @@ Model entitlement notes:
 - Only canonical model ids are accepted on the partner surface.
 - Canonical OpenAI model ids are `gpt-5.6-terra` (the default), `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
 - These ids are provider-neutral at the API boundary. Never send an Azure deployment name; deployment routing is server-managed.
-- Canonical Anthropic model ids are `claude-opus-4.5` and `claude-opus-4.6`.
+- The canonical Anthropic model id is `claude-sonnet-5.5` (Pro and Max plans).
+- `claude-opus-4.5` and `claude-opus-4.6` are retired. A settings update that still sends one is accepted and saved as `claude-sonnet-5.5`; responses return `claude-sonnet-5.5` and never a retired id. Accounts that had picked Claude Opus now run on `claude-sonnet-5.5`.
 - Canonical Gemini model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
 - Canonical Grok model ids are `grok-4.1-fast-reasoning` and `grok-4`.
 - If a model is unavailable for your account, the API returns `400 Bad Request` with `error.details.requiredPlan`, `error.details.upgradeUrl`, and an error message containing the same plan-specific Stripe link.
@@ -1365,7 +1366,7 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/decisions?action=skip&p
       "signalFamily": "disclosure",
       "strategyKey": "congress_ptr",
       "llmConfidence": 0.82,
-      "modelVersion": "claude-opus-4.6",
+      "modelVersion": "claude-sonnet-5.5",
       "regimeFit": 0.7,
       "riskRewardRatio": 2.1,
       "screenScore": 88,
@@ -1379,7 +1380,7 @@ curl "https://partners.andmilo.com/api/v1/users/{userId}/decisions?action=skip&p
 }
 ```
 
-`orderPlaced` is `false` for shadow decisions and gated skips — the full pipeline ran and recorded the decision, but no order was placed. `returns` are long-biased decimal fractions scored forward from the decision price (`null` until scored). Free-text block reasons for allocation/fee/budget gates remain in `diary-logs`.
+`orderPlaced` is `false` for shadow decisions and gated skips — the full pipeline ran and recorded the decision, but no order was placed. `returns` are long-biased decimal fractions scored forward from the decision price (`null` until scored). Free-text block reasons for allocation/fee/budget gates remain in `diary-logs`. `modelVersion` is the model that made that decision, so rows from before 2026-10-22 can still show a retired id such as `claude-opus-4.6`.
 
 ---
 

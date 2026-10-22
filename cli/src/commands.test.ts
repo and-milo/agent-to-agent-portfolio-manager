@@ -86,6 +86,27 @@ test('accepts canonical partner model ids', () => {
   assert.equal(parseModelVersionFlag('gpt-5.6-terra'), 'gpt-5.6-terra');
 });
 
+test('accepts claude-sonnet-5.5 as a canonical model version', () => {
+  assert.equal(parseModelVersionFlag('claude-sonnet-5.5'), 'claude-sonnet-5.5');
+});
+
+test('maps retired Claude Opus model versions to claude-sonnet-5.5 with a notice', () => {
+  for (const retired of ['claude-opus-4.5', 'claude-opus-4.6']) {
+    const notices: string[] = [];
+    assert.equal(
+      parseModelVersionFlag(retired, (message) => notices.push(message)),
+      'claude-sonnet-5.5',
+    );
+    assert.deepEqual(notices, [`--model-version ${retired} is retired; using claude-sonnet-5.5.`]);
+  }
+});
+
+test('rejects non-canonical Claude spellings', () => {
+  for (const alias of ['claude-opus-4-6', '4.6', 'claude-sonnet-5-5']) {
+    assert.throws(() => parseModelVersionFlag(alias), /--model-version must be one of:/);
+  }
+});
+
 test('accepts null model version sentinel', () => {
   assert.equal(parseModelVersionFlag('null'), null);
 });

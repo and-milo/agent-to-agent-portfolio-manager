@@ -58,12 +58,17 @@ export const PARTNER_CANONICAL_MODEL_VERSIONS = [
   'gpt-5.6-terra',
   'grok-4.1-fast-reasoning',
   'grok-4',
-  'claude-opus-4.5',
-  'claude-opus-4.6',
+  'claude-sonnet-5.5',
 ] as const;
 const PARTNER_CANONICAL_MODEL_VERSION_SET = new Set<string>(
   PARTNER_CANONICAL_MODEL_VERSIONS,
 );
+// Retired model ids and the canonical id that replaced them. The API still
+// accepts them and saves the replacement; the CLI sends the replacement.
+export const PARTNER_RETIRED_MODEL_VERSIONS: Readonly<Record<string, string>> = {
+  'claude-opus-4.5': 'claude-sonnet-5.5',
+  'claude-opus-4.6': 'claude-sonnet-5.5',
+};
 
 function parseOptionalJsonArray(value: unknown, flagName: string): unknown[] | undefined {
   if (value === undefined) return undefined;
@@ -178,6 +183,7 @@ function buildOveragePaymentOpts(flags: Record<string, string | undefined>) {
 
 export function parseModelVersionFlag(
   value: string | undefined,
+  warn: (message: string) => void = (message) => console.error(message),
 ): string | null | undefined {
   if (value === undefined) return undefined;
   const trimmed = value.trim();
@@ -185,6 +191,11 @@ export function parseModelVersionFlag(
     throw new Error('--model-version cannot be empty');
   }
   if (trimmed.toLowerCase() === 'null') return null;
+  if (Object.prototype.hasOwnProperty.call(PARTNER_RETIRED_MODEL_VERSIONS, trimmed)) {
+    const replacement = PARTNER_RETIRED_MODEL_VERSIONS[trimmed]!;
+    warn(`--model-version ${trimmed} is retired; using ${replacement}.`);
+    return replacement;
+  }
   if (!PARTNER_CANONICAL_MODEL_VERSION_SET.has(trimmed)) {
     throw new Error(
       `--model-version must be one of: ${PARTNER_CANONICAL_MODEL_VERSIONS.join(', ')}, or "null"`,
