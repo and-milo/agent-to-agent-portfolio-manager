@@ -69,6 +69,25 @@ export const PARTNER_RETIRED_MODEL_VERSIONS: Readonly<Record<string, string>> = 
   'claude-opus-4.5': 'claude-sonnet-5.5',
   'claude-opus-4.6': 'claude-sonnet-5.5',
 };
+// Retired allocation asset classes. The API still accepts them and saves their
+// weight as `stables` (cash). The CLI sends the allocation unchanged: an
+// update merges a sparse allocation over the saved one, so moving the weight
+// into `stables` here would overwrite the saved cash weight.
+export const PARTNER_RETIRED_ALLOCATION_CLASSES = ['trenches'] as const;
+
+/** Notes (on stderr by default) each retired asset class given weight. */
+export function warnRetiredAllocationClasses(
+  allocation: unknown,
+  warn: (message: string) => void = (message) => console.error(message),
+): void {
+  if (!allocation || typeof allocation !== 'object' || Array.isArray(allocation)) return;
+  for (const key of PARTNER_RETIRED_ALLOCATION_CLASSES) {
+    const value = (allocation as Record<string, unknown>)[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      warn(`--allocation-json: ${key} is retired; the API saves its ${value}% as stables (cash).`);
+    }
+  }
+}
 
 function parseOptionalJsonArray(value: unknown, flagName: string): unknown[] | undefined {
   if (value === undefined) return undefined;
@@ -734,7 +753,11 @@ export const COMMANDS: CommandDef[] = [
         description: `Preferred model (or "null" to clear). Only canonical public ids are accepted: ${PARTNER_CANONICAL_MODEL_VERSIONS.join(', ')}. If unavailable for the account, the API returns 400 with a plan-specific Stripe upgrade link.`,
       },
       { name: 'instructions', description: 'Free-text trading instructions' },
-      { name: 'allocation-json', description: 'Asset class allocation JSON (e.g. \'{"majors":40,"memes":20}\')' },
+      {
+        name: 'allocation-json',
+        description:
+          'Asset class allocation JSON (e.g. \'{"majors":40,"memes":20}\'). `trenches` is retired: accepted, but saved as stables.',
+      },
       { name: 'custom-tickers-json', description: 'Custom tickers JSON array (e.g. \'["SOL","JUP"]\')' },
       {
         name: 'data-sources-json',
@@ -757,6 +780,7 @@ export const COMMANDS: CommandDef[] = [
       if (modelVersion !== undefined) body.modelVersion = modelVersion;
       if (flags['instructions']) body.instructions = flags['instructions'];
       const allocation = parseJson(flags['allocation-json'], 'allocation-json');
+      warnRetiredAllocationClasses(allocation);
       if (allocation) body.allocation = allocation;
       const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
       if (tickers) body.customTickers = tickers;
@@ -825,7 +849,10 @@ export const COMMANDS: CommandDef[] = [
       { name: 'strategy', description: 'VALUE INVESTOR, SWING TRADER, SCALPER, or CUSTOM', required: true },
       { name: 'description', description: 'Strategy description' },
       { name: 'instructions', description: 'Trading instructions for the agent' },
-      { name: 'allocation-json', description: 'Asset class allocation JSON' },
+      {
+        name: 'allocation-json',
+        description: 'Asset class allocation JSON. `trenches` is retired: accepted, but saved as stables.',
+      },
       { name: 'custom-tickers-json', description: 'Custom tickers JSON array' },
       {
         name: 'data-sources-json',
@@ -852,6 +879,7 @@ export const COMMANDS: CommandDef[] = [
       if (flags['description']) body.description = flags['description'];
       if (flags['instructions']) body.instructions = flags['instructions'];
       const allocation = parseJson(flags['allocation-json'], 'allocation-json');
+      warnRetiredAllocationClasses(allocation);
       if (allocation) body.allocation = allocation;
       const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
       if (tickers) body.customTickers = tickers;
@@ -881,7 +909,10 @@ export const COMMANDS: CommandDef[] = [
       { name: 'strategy', description: 'Trading strategy type' },
       { name: 'description', description: 'Strategy description' },
       { name: 'instructions', description: 'Trading instructions' },
-      { name: 'allocation-json', description: 'Asset class allocation JSON' },
+      {
+        name: 'allocation-json',
+        description: 'Asset class allocation JSON. `trenches` is retired: accepted, but saved as stables.',
+      },
       { name: 'custom-tickers-json', description: 'Custom tickers JSON array' },
       {
         name: 'data-sources-json',
@@ -908,6 +939,7 @@ export const COMMANDS: CommandDef[] = [
       if (flags['description']) body.description = flags['description'];
       if (flags['instructions']) body.instructions = flags['instructions'];
       const allocation = parseJson(flags['allocation-json'], 'allocation-json');
+      warnRetiredAllocationClasses(allocation);
       if (allocation) body.allocation = allocation;
       const tickers = parseJson(flags['custom-tickers-json'], 'custom-tickers-json');
       if (tickers) body.customTickers = tickers;
