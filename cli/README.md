@@ -140,6 +140,7 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
   - OpenAI ids are provider-neutral. Pass canonical ids to the CLI; Azure deployment names are server-managed and are rejected as model ids.
   - The Anthropic canonical model id is `claude-sonnet-5.5` (Pro and Max).
   - `claude-opus-4.5` and `claude-opus-4.6` are retired: the CLI sends `claude-sonnet-5.5` instead (and says so on stderr), which is also what the API saves if it receives a retired id.
+- The `trenches` asset class is retired. `--allocation-json` still accepts it and sends it unchanged, but the API saves its weight as `stables` (cash), and the CLI says so on stderr. Leave it out of new allocations.
   - Gemini canonical model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
   - Grok canonical model ids are `grok-4.1-fast-reasoning` and `grok-4`.
 - `update-settings`, `create-strategy`, `update-strategy`, and `sync-strategy` enforce `dataSources` entitlement.

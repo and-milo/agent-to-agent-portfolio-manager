@@ -316,7 +316,9 @@ curl -X PATCH https://partners.andmilo.com/api/v1/users/{userId}/auto-trade-sett
 
 When `strategyId` is a non-null saved strategy id, the API applies that strategy server-side. The saved `instructions`, `allocation`, `customTickers`, `assetClassSettings`, and `strategy` values are snapshotted into settings; duplicate values for those fields in the same request are ignored. `riskTolerance`, `riskPolicy`, and top-level budget limits are user-level overlays: updating only those overlay fields does not unlink or rewrite a saved strategy. Updating `riskTolerance` derives the matching default `riskPolicy`. Updating strategy fields such as `instructions`, `allocation`, `customTickers`, `assetClassSettings`, or `strategy` without a `strategyId` unlinks any active saved strategy.
 
-**Asset classes:** `trenches`, `memes`, `promising-memes`, `staking`, `native`, `majors`, `alt-coins`, `stables`, `xStocks`, `stocks`, `rwa-stocks`, `rwa-etfs`, `rwa-metals`, `rwa-currencies`, `rwa-pre-ipo`, `custom`
+**Asset classes:** `memes`, `promising-memes`, `staking`, `native`, `majors`, `alt-coins`, `stables`, `xStocks`, `stocks`, `rwa-stocks`, `rwa-etfs`, `rwa-metals`, `rwa-currencies`, `rwa-pre-ipo`, `custom`
+
+`trenches` is retired: it is still accepted, and responses may still include it at `0`, but any weight you give it is saved as `stables` (cash), with the total unchanged. Stored allocations that held `trenches` weight were moved to `stables` the same way. Leave it out of new integrations.
 
 `stocks` is reserved for real brokered equities and only executes through active, ready `stock_brokerage` trading accounts. Wallet-backed trading accounts skip `stocks` opportunities.
 

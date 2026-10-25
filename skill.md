@@ -595,7 +595,9 @@ curl -X PATCH {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings \
 | `dataSources` | object \| null | Global data-source toggles: `fundingRates`, `openInterest`, `liquidationData`, `macroData` |
 | `assetClassSettings` | object \| null | Per-asset-class configuration, including nested `dataSources` overrides |
 
-**Asset classes for allocation:** `trenches`, `memes`, `promising-memes`, `staking`, `native`, `majors`, `stables`, `xStocks`, `custom`
+**Asset classes for allocation:** `memes`, `promising-memes`, `staking`, `native`, `majors`, `stables`, `xStocks`, `custom`
+
+`trenches` is retired: it is still accepted, and responses may still include it at `0`, but any weight you give it is saved as `stables` (cash), with the total unchanged. Stored allocations that held `trenches` weight were moved to `stables` the same way. Leave it out of new integrations.
 
 Data-source resolution notes:
 - Asset-class `dataSources` overrides win over top-level `dataSources`.

@@ -13,6 +13,7 @@ import {
   validateMinValueUsdFlag,
   validatePagingFlags,
   validateResearchWindowFlags,
+  warnRetiredAllocationClasses,
 } from './commands.js';
 
 function makeArray(size: number) {
@@ -477,4 +478,22 @@ test('get-messages returns the API response unchanged', async () => {
     {} as any,
   );
   assert.equal(result, response);
+});
+
+test('notes a retired trenches weight on --allocation-json and leaves the allocation unchanged', () => {
+  const allocation = { trenches: 10, majors: 90 };
+  const notices: string[] = [];
+  warnRetiredAllocationClasses(allocation, (message) => notices.push(message));
+  assert.deepEqual(notices, [
+    '--allocation-json: trenches is retired; the API saves its 10% as stables (cash).',
+  ]);
+  assert.deepEqual(allocation, { trenches: 10, majors: 90 });
+});
+
+test('no retired-class notice without a positive trenches weight', () => {
+  const notices: string[] = [];
+  for (const allocation of [{ trenches: 0, majors: 100 }, { majors: 100 }, undefined, null, [1]]) {
+    warnRetiredAllocationClasses(allocation, (message) => notices.push(message));
+  }
+  assert.deepEqual(notices, []);
 });
