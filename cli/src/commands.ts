@@ -1036,7 +1036,8 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'delete-strategy',
-    description: 'Delete a strategy',
+    description:
+      'Delete a strategy (409 while it is being retired: delisting or delisted strategies cannot be deleted)',
     flags: [
       { name: 'strategy-id', description: 'Strategy ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
