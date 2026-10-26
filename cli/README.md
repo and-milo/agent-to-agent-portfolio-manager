@@ -79,8 +79,8 @@ All commands output JSON to stdout. Pipe to `jq` for formatting.
 | `send-tokens` | Send tokens from your Milo wallet |
 | `get-settings` | Get auto-trade configuration (`--trading-account-id` for a non-default account) |
 | `update-settings` | Update auto-trade configuration (`--trading-account-id` for a non-default account) |
-| `list-strategies` | List autotrade strategies |
-| `get-strategy` | Get strategy details |
+| `list-strategies` | List autotrade strategies (delisting/delisted ones are hidden unless you own or run them) |
+| `get-strategy` | Get strategy details (incl. `delistingStatus`, `delistAt`, `delistingReason`) |
 | `create-strategy` | Create a strategy (`--source-family` opts it into a signal feed; see `signal-feeds`) |
 | `update-strategy` | ⚠️ Update a strategy (passed fields overwrite saved values; affects a linked live account once re-synced; `--source-family null` opts out of a feed) |
 | `delete-strategy` | Delete a strategy |
@@ -143,6 +143,7 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
 - The `trenches` asset class is retired. `--allocation-json` still accepts it and sends it unchanged, but the API saves its weight as `stables` (cash), and the CLI says so on stderr. Leave it out of new allocations.
   - Gemini canonical model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
   - Grok canonical model ids are `grok-4.1-fast-reasoning` and `grok-4`.
+- Delisted strategies: a strategy can carry `delistingStatus` (`delisting` during a countdown to `delistAt`, then `delisted`) and a `delistingReason` code (`strategy_retired`, `underperformance_vs_benchmark`). `get-strategy` and `list-strategies` note these on stderr. `update-settings --strategy-id` with a delisting/delisted strategy (unless the account already runs it), `update-settings --is-active true` on an account that runs one, `sync-strategy` onto an account not already on it, and `deploy-arena` return `400`; `delete-strategy` returns `409` ("This strategy is being retired and cannot be deleted."). A `delete-strategy` already in progress also returns `409` ("This strategy is already being deleted."); retry later. At the deadline accounts still on it are paused (`pausedReason: "agent_delisted"`, open positions and their stop-loss / take-profit orders stay active); `get-settings` notes that on stderr. `update-settings --strategy-id <listed strategy>` resumes the account.
 - `update-settings`, `create-strategy`, `update-strategy`, and `sync-strategy` enforce `dataSources` entitlement.
   - Supported data-source keys are `fundingRates`, `openInterest`, `liquidationData`, and `macroData`.
   - Only Pro and Max can change `dataSources`, or sync a strategy that already contains them.

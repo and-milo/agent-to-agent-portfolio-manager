@@ -14,6 +14,7 @@ import {
   validatePagingFlags,
   validateResearchWindowFlags,
   warnRetiredAllocationClasses,
+  noteDelisting,
 } from './commands.js';
 
 function makeArray(size: number) {
@@ -496,4 +497,82 @@ test('no retired-class notice without a positive trenches weight', () => {
     warnRetiredAllocationClasses(allocation, (message) => notices.push(message));
   }
   assert.deepEqual(notices, []);
+});
+
+test('notes delisting strategies in list and detail reads, leaves the JSON alone', () => {
+  const list = {
+    data: [
+      {
+        name: 'Trench Scalp',
+        delistingStatus: 'delisting',
+        delistAt: '2026-10-28T12:00:00.000Z',
+        delistingReason: 'strategy_retired',
+      },
+      { name: 'Blue Chip Buy & Hold', delistingStatus: null },
+      { name: 'Gold Vault', delistingStatus: 'delisted', delistingReason: 'something_new' },
+    ],
+    meta: { page: 1 },
+  };
+  const before = JSON.stringify(list);
+  const notices: string[] = [];
+  noteDelisting(list, (m) => notices.push(m));
+  assert.deepEqual(notices, [
+    '"Trench Scalp": this agent\'s strategy is being retired. It stops trading at 2026-10-28T12:00:00.000Z. It can\'t be newly linked; switch to an active agent to keep trading.',
+    '"Gold Vault": this agent\'s strategy was retired and it no longer trades. It can\'t be linked or re-activated.',
+  ]);
+  assert.equal(JSON.stringify(list), before);
+
+  const detail: string[] = [];
+  noteDelisting(
+    { data: { name: 'Meme Sniper v1', delistingStatus: 'delisted', delistingReason: 'underperformance_vs_benchmark' } },
+    (m) => detail.push(m),
+  );
+  assert.deepEqual(detail, [
+    '"Meme Sniper v1": this agent underperformed its market benchmark and was delisted; it no longer trades. It can\'t be linked or re-activated.',
+  ]);
+});
+
+test('notes an account paused by a delisting on a settings read', () => {
+  const notices: string[] = [];
+  noteDelisting({ isActive: false, pausedReason: 'agent_delisted' }, (m) => notices.push(m));
+  assert.equal(notices.length, 1);
+  assert.match(notices[0], /paused because its strategy was delisted/);
+  assert.match(notices[0], /`update-settings --strategy-id <id>`/);
+  const quiet: string[] = [];
+  for (const value of [{ isActive: true, pausedReason: null }, null, undefined, 'x', { data: [] }]) {
+    noteDelisting(value, (m) => quiet.push(m));
+  }
+  assert.deepEqual(quiet, []);
+});
+
+test('the paused-account recovery command keeps the account that was read', async () => {
+  const notices: string[] = [];
+  noteDelisting({ pausedReason: 'agent_delisted' }, (m) => notices.push(m), {
+    tradingAccountId: 'acct-2',
+  });
+  assert.match(notices[0], /`update-settings --trading-account-id acct-2 --strategy-id <id>`/);
+
+  const byUser: string[] = [];
+  noteDelisting({ pausedReason: 'agent_delisted' }, (m) => byUser.push(m), { userId: 'u9' });
+  assert.match(byUser[0], /`update-settings --user-id u9 --strategy-id <id>`/);
+
+  // Through the command: get-settings --trading-account-id routes the hint.
+  const original = console.error;
+  const printed: string[] = [];
+  console.error = (m: unknown) => printed.push(String(m));
+  try {
+    const getSettings = COMMANDS.find((c) => c.name === 'get-settings')!;
+    const client = {
+      getAccountAutoTradeSettings: async () => ({ isActive: false, pausedReason: 'agent_delisted' }),
+    } as any;
+    await getSettings.handler({ 'trading-account-id': '33333333-3333-4333-8333-333333333333' }, client, {
+      user_id: 'u1',
+    } as any);
+  } finally {
+    console.error = original;
+  }
+  assert.match(
+    printed.join('\n'),
+    /update-settings --trading-account-id 33333333-3333-4333-8333-333333333333 --strategy-id <id>/,
+  );
 });
