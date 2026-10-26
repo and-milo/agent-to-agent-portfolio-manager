@@ -458,7 +458,7 @@ Milo can delist a Discover strategy (for example when it is retired, or when it 
 - **Lists hide it.** List Strategies (any `scope`) omits a delisting or delisted strategy unless the user owns it or one of the user's trading accounts runs it. Get Strategy still returns it.
 - **No new selections.** While `delistingStatus` is set, linking it to an account that is not already on it (`strategyId` on Update Settings / Update Account Settings, or Sync Strategy), turning on an account that runs it (`isActive: true`), and Deploy to Arena return `400 Bad Request` (`error.code: "bad_request"`; the message names the strategy and ends "Pick another agent."). Re-syncing an account that already runs it is allowed and does not turn it on.
 - **During the countdown** accounts already on it keep trading, and overlay updates (`riskTolerance`, `riskPolicy`, `modelVersion`) still work. The user gets an in-app diary entry with the deadline.
-- **At the deadline** every account still on it is paused: settings read `isActive: false`, `pausedReason: "agent_delisted"` and `pausedAt`. A paused account opens no new trades; its open positions and their stop-loss / take-profit orders stay active. The user gets a second diary entry.
+- **At the deadline** every account still on it is paused: settings read `isActive: false`, `pausedReason: "agent_delisted"` and `pausedAt`. A paused account opens no new trades, and its pending (unfilled) auto-trader buy orders are cancelled; its open positions and their stop-loss / take-profit orders stay active. The user gets a second diary entry.
 - **To resume**, link a listed strategy (`{ "strategyId": "<listed strategy>" }`): this clears `pausedReason` and turns auto-trading back on, unless the same request sends `isActive`.
 
 ---
