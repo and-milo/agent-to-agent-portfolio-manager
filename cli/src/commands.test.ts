@@ -537,10 +537,42 @@ test('notes an account paused by a delisting on a settings read', () => {
   noteDelisting({ isActive: false, pausedReason: 'agent_delisted' }, (m) => notices.push(m));
   assert.equal(notices.length, 1);
   assert.match(notices[0], /paused because its strategy was delisted/);
-  assert.match(notices[0], /update-settings --strategy-id <id>/);
+  assert.match(notices[0], /`update-settings --strategy-id <id>`/);
   const quiet: string[] = [];
   for (const value of [{ isActive: true, pausedReason: null }, null, undefined, 'x', { data: [] }]) {
     noteDelisting(value, (m) => quiet.push(m));
   }
   assert.deepEqual(quiet, []);
+});
+
+test('the paused-account recovery command keeps the account that was read', async () => {
+  const notices: string[] = [];
+  noteDelisting({ pausedReason: 'agent_delisted' }, (m) => notices.push(m), {
+    tradingAccountId: 'acct-2',
+  });
+  assert.match(notices[0], /`update-settings --trading-account-id acct-2 --strategy-id <id>`/);
+
+  const byUser: string[] = [];
+  noteDelisting({ pausedReason: 'agent_delisted' }, (m) => byUser.push(m), { userId: 'u9' });
+  assert.match(byUser[0], /`update-settings --user-id u9 --strategy-id <id>`/);
+
+  // Through the command: get-settings --trading-account-id routes the hint.
+  const original = console.error;
+  const printed: string[] = [];
+  console.error = (m: unknown) => printed.push(String(m));
+  try {
+    const getSettings = COMMANDS.find((c) => c.name === 'get-settings')!;
+    const client = {
+      getAccountAutoTradeSettings: async () => ({ isActive: false, pausedReason: 'agent_delisted' }),
+    } as any;
+    await getSettings.handler({ 'trading-account-id': '33333333-3333-4333-8333-333333333333' }, client, {
+      user_id: 'u1',
+    } as any);
+  } finally {
+    console.error = original;
+  }
+  assert.match(
+    printed.join('\n'),
+    /update-settings --trading-account-id 33333333-3333-4333-8333-333333333333 --strategy-id <id>/,
+  );
 });

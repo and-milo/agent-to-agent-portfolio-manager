@@ -105,10 +105,15 @@ function delistingReasonText(reason: unknown): string {
   );
 }
 
-/** Notes (on stderr by default) delisting strategies and delisting-paused settings. */
+/**
+ * Notes (on stderr by default) delisting strategies and delisting-paused
+ * settings. `route` is the account the settings were read for, so the
+ * suggested recovery command updates that same account (never the default).
+ */
 export function noteDelisting(
   result: unknown,
   warn: (message: string) => void = (message) => console.error(message),
+  route: { tradingAccountId?: string; userId?: string } = {},
 ): void {
   if (!result || typeof result !== 'object') return;
   const record = result as Record<string, unknown>;
@@ -131,8 +136,13 @@ export function noteDelisting(
       );
     }
     if (row.pausedReason === 'agent_delisted') {
+      const selector = route.tradingAccountId
+        ? ` --trading-account-id ${route.tradingAccountId}`
+        : route.userId
+          ? ` --user-id ${route.userId}`
+          : '';
       warn(
-        'This account is paused because its strategy was delisted (open positions and their stop-loss / take-profit orders stay active). Link a listed strategy with `update-settings --strategy-id <id>` to resume.',
+        `This account is paused because its strategy was delisted (open positions and their stop-loss / take-profit orders stay active). Link a listed strategy with \`update-settings${selector} --strategy-id <id>\` to resume.`,
       );
     }
   }
@@ -777,10 +787,15 @@ export const COMMANDS: CommandDef[] = [
     ],
     handler: async (flags, client, config) => {
       const accountId = parseTradingAccountIdFlag(flags['trading-account-id']);
-      const settings = accountId
-        ? await client.getAccountAutoTradeSettings(accountId)
-        : await client.getAutoTradeSettings(requireFlag(flags, 'user-id', config.user_id));
-      noteDelisting(settings);
+      if (accountId) {
+        const settings = await client.getAccountAutoTradeSettings(accountId);
+        noteDelisting(settings, undefined, { tradingAccountId: accountId });
+        return settings;
+      }
+      const userId = requireFlag(flags, 'user-id', config.user_id);
+      const settings = await client.getAutoTradeSettings(userId);
+      // An explicit --user-id is echoed; the configured default needs none.
+      noteDelisting(settings, undefined, flags['user-id'] ? { userId } : {});
       return settings;
     },
   },
