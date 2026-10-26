@@ -517,8 +517,8 @@ test('notes delisting strategies in list and detail reads, leaves the JSON alone
   const notices: string[] = [];
   noteDelisting(list, (m) => notices.push(m));
   assert.deepEqual(notices, [
-    '"Trench Scalp" is being delisted (its strategy was retired): it can\'t be newly linked, and accounts on it stop opening trades at 2026-10-28T12:00:00.000Z.',
-    '"Gold Vault" was delisted (it was retired from Discover): it can\'t be linked or re-activated.',
+    '"Trench Scalp": this agent\'s strategy is being retired. It stops trading at 2026-10-28T12:00:00.000Z. It can\'t be newly linked; switch to an active agent to keep trading.',
+    '"Gold Vault": this agent\'s strategy was retired and it no longer trades. It can\'t be linked or re-activated.',
   ]);
   assert.equal(JSON.stringify(list), before);
 
@@ -528,7 +528,7 @@ test('notes delisting strategies in list and detail reads, leaves the JSON alone
     (m) => detail.push(m),
   );
   assert.deepEqual(detail, [
-    '"Meme Sniper v1" was delisted (it underperformed its market benchmark): it can\'t be linked or re-activated.',
+    '"Meme Sniper v1": this agent underperformed its market benchmark and was delisted; it no longer trades. It can\'t be linked or re-activated.',
   ]);
 });
 

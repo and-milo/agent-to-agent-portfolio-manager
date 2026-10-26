@@ -93,16 +93,23 @@ export function warnRetiredAllocationClasses(
 // carry delistingStatus / delistAt / delistingReason; settings carry
 // pausedReason 'agent_delisted' once the deadline paused the account. The CLI
 // prints the JSON unchanged on stdout and notes these on stderr.
-export const PARTNER_DELISTING_REASON_TEXT: Readonly<Record<string, string>> = {
-  strategy_retired: 'its strategy was retired',
-  underperformance_vs_benchmark: 'it underperformed its market benchmark',
-};
-
-function delistingReasonText(reason: unknown): string {
-  return (
-    (typeof reason === 'string' && PARTNER_DELISTING_REASON_TEXT[reason]) ||
-    'it was retired from Discover'
-  );
+// Two-stage copy, as in the milo app: during the countdown the strategy "is
+// being retired" (or, for underperformance, "is being delisted"); after the
+// deadline it "was retired and it no longer trades". Unknown reason codes
+// read as retired.
+function delistingLead(
+  name: string,
+  reason: unknown,
+  stage: 'countdown' | 'after',
+): string {
+  if (reason === 'underperformance_vs_benchmark') {
+    return stage === 'countdown'
+      ? `${name}: this agent underperformed its market benchmark and is being delisted.`
+      : `${name}: this agent underperformed its market benchmark and was delisted; it no longer trades.`;
+  }
+  return stage === 'countdown'
+    ? `${name}: this agent's strategy is being retired.`
+    : `${name}: this agent's strategy was retired and it no longer trades.`;
 }
 
 /**
@@ -128,11 +135,11 @@ export function noteDelisting(
     const name = typeof row.name === 'string' ? `"${row.name}"` : 'This strategy';
     if (row.delistingStatus === 'delisting') {
       warn(
-        `${name} is being delisted (${delistingReasonText(row.delistingReason)}): it can't be newly linked, and accounts on it stop opening trades at ${String(row.delistAt)}.`,
+        `${delistingLead(name, row.delistingReason, 'countdown')} It stops trading at ${String(row.delistAt)}. It can't be newly linked; switch to an active agent to keep trading.`,
       );
     } else if (row.delistingStatus === 'delisted') {
       warn(
-        `${name} was delisted (${delistingReasonText(row.delistingReason)}): it can't be linked or re-activated.`,
+        `${delistingLead(name, row.delistingReason, 'after')} It can't be linked or re-activated.`,
       );
     }
     if (row.pausedReason === 'agent_delisted') {
