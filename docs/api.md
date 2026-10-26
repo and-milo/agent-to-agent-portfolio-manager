@@ -460,7 +460,7 @@ Milo can delist a Discover strategy (for example when it is retired, or when it 
 - **No deletion.** Delete Strategy on a delisting or delisted strategy returns `409 Conflict` with the message "This strategy is being retired and cannot be deleted."
 - **During the countdown** accounts already on it keep trading, and overlay updates (`riskTolerance`, `riskPolicy`, `modelVersion`) still work. The user gets an in-app diary entry with the deadline.
 - **At the deadline** every account still on it is paused: settings read `isActive: false`, `pausedReason: "agent_delisted"` and `pausedAt`. A paused account opens no new trades, and its pending (unfilled) auto-trader buy orders are cancelled; its open positions and their stop-loss / take-profit orders stay active. The user gets a second diary entry.
-- **To resume**, link a listed strategy (`{ "strategyId": "<listed strategy>" }`): this clears `pausedReason` and turns auto-trading back on, unless the same request sends `isActive`.
+- **To resume**, link a listed strategy (`{ "strategyId": "<listed strategy>" }`): this clears `pausedReason` and turns auto-trading back on, unless the same request sends `isActive`. Editing a paused account's strategy fields without a `strategyId` unlinks the strategy but keeps the account paused (`pausedReason` stays, its exits stay managed); sending `isActive: true` then resumes it on that custom configuration.
 
 ---
 
