@@ -89,6 +89,55 @@ export function warnRetiredAllocationClasses(
   }
 }
 
+// Agent delisting (agents-service feat/agent-delisting): strategy objects
+// carry delistingStatus / delistAt / delistingReason; settings carry
+// pausedReason 'agent_delisted' once the deadline paused the account. The CLI
+// prints the JSON unchanged on stdout and notes these on stderr.
+export const PARTNER_DELISTING_REASON_TEXT: Readonly<Record<string, string>> = {
+  strategy_retired: 'its strategy was retired',
+  underperformance_vs_benchmark: 'it underperformed its market benchmark',
+};
+
+function delistingReasonText(reason: unknown): string {
+  return (
+    (typeof reason === 'string' && PARTNER_DELISTING_REASON_TEXT[reason]) ||
+    'it was retired from Discover'
+  );
+}
+
+/** Notes (on stderr by default) delisting strategies and delisting-paused settings. */
+export function noteDelisting(
+  result: unknown,
+  warn: (message: string) => void = (message) => console.error(message),
+): void {
+  if (!result || typeof result !== 'object') return;
+  const record = result as Record<string, unknown>;
+  const items = Array.isArray(record.data)
+    ? (record.data as unknown[])
+    : record.data && typeof record.data === 'object'
+      ? [record.data]
+      : [record];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    const name = typeof row.name === 'string' ? `"${row.name}"` : 'This strategy';
+    if (row.delistingStatus === 'delisting') {
+      warn(
+        `${name} is being delisted (${delistingReasonText(row.delistingReason)}): it can't be newly linked, and accounts on it stop opening trades at ${String(row.delistAt)}.`,
+      );
+    } else if (row.delistingStatus === 'delisted') {
+      warn(
+        `${name} was delisted (${delistingReasonText(row.delistingReason)}): it can't be linked or re-activated.`,
+      );
+    }
+    if (row.pausedReason === 'agent_delisted') {
+      warn(
+        'This account is paused because its strategy was delisted (open positions and their stop-loss / take-profit orders stay active). Link a listed strategy with `update-settings --strategy-id <id>` to resume.',
+      );
+    }
+  }
+}
+
 function parseOptionalJsonArray(value: unknown, flagName: string): unknown[] | undefined {
   if (value === undefined) return undefined;
   if (!Array.isArray(value)) {
@@ -728,9 +777,11 @@ export const COMMANDS: CommandDef[] = [
     ],
     handler: async (flags, client, config) => {
       const accountId = parseTradingAccountIdFlag(flags['trading-account-id']);
-      if (accountId) return client.getAccountAutoTradeSettings(accountId);
-      const userId = requireFlag(flags, 'user-id', config.user_id);
-      return client.getAutoTradeSettings(userId);
+      const settings = accountId
+        ? await client.getAccountAutoTradeSettings(accountId)
+        : await client.getAutoTradeSettings(requireFlag(flags, 'user-id', config.user_id));
+      noteDelisting(settings);
+      return settings;
     },
   },
 
@@ -747,7 +798,11 @@ export const COMMANDS: CommandDef[] = [
       { name: 'is-active', description: 'Enable (true) or disable (false) auto-trading' },
       { name: 'risk-tolerance', description: 'conservative, balanced, or degen' },
       { name: 'strategy', description: 'VALUE INVESTOR, SWING TRADER, SCALPER, or CUSTOM' },
-      { name: 'strategy-id', description: 'Link to a saved strategy (UUID)' },
+      {
+        name: 'strategy-id',
+        description:
+          'Link to a saved strategy (UUID). A delisting or delisted strategy is rejected (400) unless the account already runs it; linking a listed strategy resumes an account paused by a delisting.',
+      },
       {
         name: 'model-version',
         description: `Preferred model (or "null" to clear). Only canonical public ids are accepted: ${PARTNER_CANONICAL_MODEL_VERSIONS.join(', ')}. If unavailable for the account, the API returns 400 with a plan-specific Stripe upgrade link.`,
@@ -806,7 +861,8 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'list-strategies',
-    description: 'List autotrade strategies',
+    description:
+      'List autotrade strategies (delisting/delisted strategies are hidden unless you own or run them; see delistingStatus)',
     flags: [
       { name: 'user-id', description: 'User ID (default: from config)' },
       { name: 'scope', description: 'all, owned, or public' },
@@ -817,18 +873,20 @@ export const COMMANDS: CommandDef[] = [
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
       validatePagingFlags(flags['page'], flags['page-size']);
-      return client.listStrategies(userId, {
+      const strategies = await client.listStrategies(userId, {
         scope: flags['scope'],
         q: flags['q'],
         page: flags['page'],
         pageSize: flags['page-size'],
       });
+      noteDelisting(strategies);
+      return strategies;
     },
   },
 
   {
     name: 'get-strategy',
-    description: 'Get details of a strategy',
+    description: 'Get details of a strategy (includes delistingStatus, delistAt, delistingReason)',
     flags: [
       { name: 'strategy-id', description: 'Strategy ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
@@ -836,7 +894,9 @@ export const COMMANDS: CommandDef[] = [
     handler: async (flags, client, config) => {
       const userId = requireFlag(flags, 'user-id', config.user_id);
       const strategyId = requireFlag(flags, 'strategy-id');
-      return client.getStrategy(userId, strategyId);
+      const strategy = await client.getStrategy(userId, strategyId);
+      noteDelisting(strategy);
+      return strategy;
     },
   },
 

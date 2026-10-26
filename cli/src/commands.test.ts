@@ -14,6 +14,7 @@ import {
   validatePagingFlags,
   validateResearchWindowFlags,
   warnRetiredAllocationClasses,
+  noteDelisting,
 } from './commands.js';
 
 function makeArray(size: number) {
@@ -496,4 +497,50 @@ test('no retired-class notice without a positive trenches weight', () => {
     warnRetiredAllocationClasses(allocation, (message) => notices.push(message));
   }
   assert.deepEqual(notices, []);
+});
+
+test('notes delisting strategies in list and detail reads, leaves the JSON alone', () => {
+  const list = {
+    data: [
+      {
+        name: 'Trench Scalp',
+        delistingStatus: 'delisting',
+        delistAt: '2026-10-28T12:00:00.000Z',
+        delistingReason: 'strategy_retired',
+      },
+      { name: 'Blue Chip Buy & Hold', delistingStatus: null },
+      { name: 'Gold Vault', delistingStatus: 'delisted', delistingReason: 'something_new' },
+    ],
+    meta: { page: 1 },
+  };
+  const before = JSON.stringify(list);
+  const notices: string[] = [];
+  noteDelisting(list, (m) => notices.push(m));
+  assert.deepEqual(notices, [
+    '"Trench Scalp" is being delisted (its strategy was retired): it can\'t be newly linked, and accounts on it stop opening trades at 2026-10-28T12:00:00.000Z.',
+    '"Gold Vault" was delisted (it was retired from Discover): it can\'t be linked or re-activated.',
+  ]);
+  assert.equal(JSON.stringify(list), before);
+
+  const detail: string[] = [];
+  noteDelisting(
+    { data: { name: 'Meme Sniper v1', delistingStatus: 'delisted', delistingReason: 'underperformance_vs_benchmark' } },
+    (m) => detail.push(m),
+  );
+  assert.deepEqual(detail, [
+    '"Meme Sniper v1" was delisted (it underperformed its market benchmark): it can\'t be linked or re-activated.',
+  ]);
+});
+
+test('notes an account paused by a delisting on a settings read', () => {
+  const notices: string[] = [];
+  noteDelisting({ isActive: false, pausedReason: 'agent_delisted' }, (m) => notices.push(m));
+  assert.equal(notices.length, 1);
+  assert.match(notices[0], /paused because its strategy was delisted/);
+  assert.match(notices[0], /update-settings --strategy-id <id>/);
+  const quiet: string[] = [];
+  for (const value of [{ isActive: true, pausedReason: null }, null, undefined, 'x', { data: [] }]) {
+    noteDelisting(value, (m) => quiet.push(m));
+  }
+  assert.deepEqual(quiet, []);
 });

@@ -595,6 +595,8 @@ curl -X PATCH {{BASE_URL}}/api/v1/users/{userId}/auto-trade-settings \
 | `dataSources` | object \| null | Global data-source toggles: `fundingRates`, `openInterest`, `liquidationData`, `macroData` |
 | `assetClassSettings` | object \| null | Per-asset-class configuration, including nested `dataSources` overrides |
 
+Settings reads also return `pausedReason` (`null` or `"agent_delisted"`) and `pausedAt` (timestamp or `null`). `"agent_delisted"` means Milo paused this account because its linked strategy was delisted; see "Delisted strategies" under Strategies.
+
 **Asset classes for allocation:** `memes`, `promising-memes`, `staking`, `native`, `majors`, `stables`, `xStocks`, `custom`
 
 `trenches` is retired: it is still accepted, and responses may still include it at `0`, but any weight you give it is saved as `stables` (cash), with the total unchanged. Stored allocations that held `trenches` weight were moved to `stables` the same way. Leave it out of new integrations.
@@ -633,6 +635,23 @@ Strategies are reusable autotrade configurations that live under auto-trade sett
 3. **Use** — Milo auto-trades according to the snapshot.
 4. If the strategy is updated later, the GET settings response includes `strategySync.synced: false`.
 5. **Sync** — call `POST .../strategies/{strategyId}/sync` to re-apply the latest version. With an OAuth token this needs the `trade` scope (it changes the live account's settings); create/update need `strategies:write`.
+
+#### Delisted strategies
+
+Milo can delist a Discover strategy (for example when it is retired, or when it underperformed its market benchmark). Strategy objects (list and detail) carry four fields:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `delistingStatus` | `null` \| `"delisting"` \| `"delisted"` | `null` = listed. `"delisting"` = countdown to `delistAt`. `"delisted"` = past the deadline. |
+| `delistingStartedAt` | timestamp \| null | When the countdown started |
+| `delistAt` | timestamp \| null | The deadline (usually 48 hours after the start; equal to the start when nobody ran the strategy) |
+| `delistingReason` | string \| null | A reason code: `strategy_retired` or `underperformance_vs_benchmark`. More codes may be added; treat unknown codes as "retired". |
+
+- **Lists hide it:** `GET .../strategies` (any `scope`) omits a delisting or delisted strategy unless the user owns it or one of the user's trading accounts runs it. `GET .../strategies/{strategyId}` still returns it with the fields above.
+- **No new selections:** while `delistingStatus` is set, linking it to an account that is not already on it (`PATCH .../auto-trade-settings` with its `strategyId`, or `POST .../sync`), turning on an account that runs it (`isActive: true`) and deploying it to the arena all return `400 Bad Request` with `error.code: "bad_request"` and a message that names the strategy and ends "Pick another agent." Re-syncing an account that already runs it is allowed and does not turn it on.
+- **During the countdown** accounts already on it keep trading, and overlay edits (`riskTolerance`, `riskPolicy`, `modelVersion`) still work. The user gets an in-app diary line with the deadline.
+- **At the deadline** every account still on it is paused: settings read `isActive: false`, `pausedReason: "agent_delisted"` and `pausedAt`. A paused account opens no new trades. Its open positions and their stop-loss / take-profit orders stay active. The user gets a second diary line.
+- **To resume**, link a listed strategy: `PATCH .../auto-trade-settings` with `{ "strategyId": "<listed strategy>" }` clears `pausedReason` and turns auto-trading back on, unless you also send `isActive`.
 
 #### POST /api/v1/users/{userId}/auto-trade-settings/strategies
 Create a new strategy.
