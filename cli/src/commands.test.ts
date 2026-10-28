@@ -532,6 +532,26 @@ test('notes delisting strategies in list and detail reads, leaves the JSON alone
   ]);
 });
 
+test('names the fallback strategy during the countdown when one is set', () => {
+  const notices: string[] = [];
+  noteDelisting(
+    {
+      data: {
+        name: 'Trench Scalp',
+        delistingStatus: 'delisting',
+        delistAt: '2026-10-30T08:16:40.000Z',
+        delistingReason: 'strategy_retired',
+        delistingFallbackStrategyId: '6d7fbb57-4251-4a55-b0fd-a9605b25410d',
+        delistingFallbackStrategyName: 'Blue Chip Buy & Hold',
+      },
+    },
+    (m) => notices.push(m),
+  );
+  assert.deepEqual(notices, [
+    '"Trench Scalp": this agent\'s strategy is being retired. It stops trading at 2026-10-30T08:16:40.000Z. It can\'t be newly linked; switch to an active agent to keep trading. If you don\'t pick another agent before the timer ends, accounts on it move to "Blue Chip Buy & Hold".',
+  ]);
+});
+
 test('notes an account paused by a delisting on a settings read', () => {
   const notices: string[] = [];
   noteDelisting({ isActive: false, pausedReason: 'agent_delisted' }, (m) => notices.push(m));
