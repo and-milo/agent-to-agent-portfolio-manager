@@ -90,7 +90,9 @@ export function warnRetiredAllocationClasses(
 }
 
 // Agent delisting (agents-service feat/agent-delisting): strategy objects
-// carry delistingStatus / delistAt / delistingReason; settings carry
+// carry delistingStatus / delistAt / delistingReason (and, when the delisting
+// has one, delistingFallbackStrategyName: where its accounts move at the
+// deadline instead of being paused); settings carry
 // pausedReason 'agent_delisted' once the deadline paused the account. The CLI
 // prints the JSON unchanged on stdout and notes these on stderr.
 // Two-stage copy, as in the milo app: during the countdown the strategy "is
@@ -133,9 +135,16 @@ export function noteDelisting(
     if (!item || typeof item !== 'object') continue;
     const row = item as Record<string, unknown>;
     const name = typeof row.name === 'string' ? `"${row.name}"` : 'This strategy';
+    const fallbackName =
+      typeof row.delistingFallbackStrategyName === 'string'
+        ? row.delistingFallbackStrategyName
+        : null;
     if (row.delistingStatus === 'delisting') {
       warn(
-        `${delistingLead(name, row.delistingReason, 'countdown')} It stops trading at ${String(row.delistAt)}. It can't be newly linked; switch to an active agent to keep trading.`,
+        `${delistingLead(name, row.delistingReason, 'countdown')} It stops trading at ${String(row.delistAt)}. It can't be newly linked; switch to an active agent to keep trading.` +
+          (fallbackName
+            ? ` If you don't pick another agent before the timer ends, accounts on it move to "${fallbackName}".`
+            : ''),
       );
     } else if (row.delistingStatus === 'delisted') {
       warn(
@@ -908,7 +917,8 @@ export const COMMANDS: CommandDef[] = [
 
   {
     name: 'get-strategy',
-    description: 'Get details of a strategy (includes delistingStatus, delistAt, delistingReason)',
+    description:
+      'Get details of a strategy (includes delistingStatus, delistAt, delistingReason, delistingFallbackStrategyName)',
     flags: [
       { name: 'strategy-id', description: 'Strategy ID', required: true },
       { name: 'user-id', description: 'User ID (default: from config)' },
