@@ -596,3 +596,12 @@ test('the paused-account recovery command keeps the account that was read', asyn
     /update-settings --trading-account-id 33333333-3333-4333-8333-333333333333 --strategy-id <id>/,
   );
 });
+
+
+test('accepts all seven current model ids, including confidential Nito variants', () => {
+  for (const model of [
+    'gpt-6.1-terra', 'gpt-6.1-sol', 'grok-4.7', 'claude-sonnet-5.5',
+    'claude-opus-5.5', 'deepseek/deepseek-v4.1-flash:confidential',
+    'z-ai/glm-5.3:confidential',
+  ]) assert.equal(parseModelVersionFlag(model), model);
+});

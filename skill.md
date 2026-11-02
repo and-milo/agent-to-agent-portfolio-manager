@@ -609,12 +609,13 @@ Data-source resolution notes:
 
 Model entitlement notes:
 - Only canonical model ids are accepted on the partner surface.
-- Canonical OpenAI model ids are `gpt-5.6-terra` (the default), `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
+- Confidential Nito choices: `deepseek/deepseek-v4.1-flash:confidential` on Pro/Max and `z-ai/glm-5.3:confidential` on Max. Free has no Nito option. Nito uses low reasoning for chat, trading and thesis creation.
+- Canonical OpenAI model ids are `gpt-6.1-terra` (the default, Pro and Max) and `gpt-6.1-sol` (Max).
 - These ids are provider-neutral at the API boundary. Never send an Azure deployment name; deployment routing is server-managed.
-- The canonical Anthropic model id is `claude-sonnet-5.5` (Pro and Max plans).
-- `claude-opus-4.5` and `claude-opus-4.6` are retired. A settings update that still sends one is accepted and saved as `claude-sonnet-5.5`; responses return `claude-sonnet-5.5` and never a retired id. Accounts that had picked Claude Opus now run on `claude-sonnet-5.5`.
-- Canonical Gemini model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
-- Canonical Grok model ids are `grok-4.1-fast-reasoning` and `grok-4`.
+- Canonical Claude model ids are `claude-sonnet-5.5` (Pro and Max) and `claude-opus-5.5` (Max).
+- `claude-opus-4.5` and `claude-opus-4.6` are retired. A settings update that still sends one is accepted and saved as `claude-sonnet-5.5`; responses return `claude-sonnet-5.5` and never a retired id. During the model upgrade, stored legacy Opus selections migrate to `claude-opus-5.5` on Max or `claude-sonnet-5.5` on Free/Pro. Existing Sonnet selections remain Sonnet.
+- Gemini models are retired; historical ids remain readable.
+- The canonical Grok model id is `grok-4.7` (Pro and Max).
 - If a model is unavailable for your account, the API returns `400 Bad Request` with `error.details.requiredPlan`, `error.details.upgradeUrl`, and an error message containing the same plan-specific Stripe link.
 
 Data-source entitlement notes:
@@ -1501,3 +1502,9 @@ curl "{{BASE_URL}}/api/v1/research/digest?ticker=NVDA" \
 - `GET /api/v1/users/{userId}/decisions` — the user's decision ledger. Shadow-stage feeds record decisions here (with forward-return scoring) but never place orders.
 - Only partner-visible signal feeds appear in `/signal-feeds`, `/decisions` and diary logs: decisions and diary entries from internal feeds are excluded from both the items and the totals.
 - Conversation messages may carry a `widgets` array of rich artifacts (`{ "type": string, "data": object }`, e.g. `PriceChart`, `NewsFeed`, `AnalystConsensus`). Ignore unknown types — the set grows over time.
+
+### Model reasoning policy (2026-11-01)
+
+Chat, trading decisions and position reviews use low reasoning. A proposed trade receives a separate medium-reasoning thesis call; skipped trades do not. The thesis call keeps the trade action and order levels fixed. Max includes the Pro model choices, plus GPT-6.1 Sol and Claude Opus 5.5. Legacy OpenAI settings upgrade to Terra on Pro or Sol on Max; legacy Grok settings upgrade to Grok 4.7. Explicit GPT-5.6 Terra settings upgrade to GPT-6.1 Terra. Stored legacy Opus 4.5/4.6 selections upgrade to Opus 5.5 on Max or Sonnet 5.5 on Free/Pro. Default/null settings inherit Terra; existing Sonnet selections stay Sonnet. Historical records retain the model that ran.
+
+Gemini models are retired from model selection. Existing Gemini selections upgrade to GPT-6.1 Terra on Pro or GPT-6.1 Sol on Max. GPT, Grok and Claude run through Azure. Confidential DeepSeek Flash (Pro/Max) and GLM 5.3 (Max) run through Nito and use low reasoning for thesis calls too; Free has no Nito choice. Old model ids remain valid in historical records.
