@@ -49,20 +49,23 @@ const MAX_TOTAL_DEPENDANTS = 8;
 // Public model ids are provider-neutral. Azure deployment names remain
 // server-side runtime configuration and must never be added to this list.
 export const PARTNER_CANONICAL_MODEL_VERSIONS = [
-  'o3',
-  'gemini-3-pro',
-  'gemini-3.1-pro-preview',
-  'gpt-5.2-high',
-  'gpt-5.2-xh',
-  'gpt-5.4',
-  'gpt-5.6-terra',
-  'grok-4.1-fast-reasoning',
-  'grok-4',
+  'deepseek/deepseek-v4.1-flash:confidential',
+  'z-ai/glm-5.3:confidential',
+  'gpt-6.1-terra',
+  'gpt-6.1-sol',
+  'grok-4.7',
   'claude-sonnet-5.5',
+  'claude-opus-5.5',
 ] as const;
-const PARTNER_CANONICAL_MODEL_VERSION_SET = new Set<string>(
-  PARTNER_CANONICAL_MODEL_VERSIONS,
-);
+// Legacy public IDs remain accepted by the API during the settings upgrade.
+const PARTNER_LEGACY_MODEL_VERSIONS = [
+  'o3', 'gemini-3-pro', 'gemini-3.1-pro-preview', 'gpt-5.2-high',
+  'gpt-5.2-xh', 'gpt-5.4', 'gpt-5.6-terra', 'grok-4.1-fast-reasoning', 'grok-4',
+] as const;
+const PARTNER_CANONICAL_MODEL_VERSION_SET = new Set<string>([
+  ...PARTNER_CANONICAL_MODEL_VERSIONS,
+  ...PARTNER_LEGACY_MODEL_VERSIONS,
+]);
 // Retired model ids and the canonical id that replaced them. The API still
 // accepts them and saves the replacement; the CLI sends the replacement.
 export const PARTNER_RETIRED_MODEL_VERSIONS: Readonly<Record<string, string>> = {
@@ -836,7 +839,7 @@ export const COMMANDS: CommandDef[] = [
       },
       {
         name: 'model-version',
-        description: `Preferred model (or "null" to clear). Only canonical public ids are accepted: ${PARTNER_CANONICAL_MODEL_VERSIONS.join(', ')}. If unavailable for the account, the API returns 400 with a plan-specific Stripe upgrade link.`,
+        description: `Preferred model (or "null" for Terra). Pro: Terra 6.1, Sonnet 5.5, Grok 4.7, Nito DeepSeek Flash; Max also: Sol 6.1, Opus 5.5, Nito GLM 5.3. Max inherits Pro choices. Current public ids: ${PARTNER_CANONICAL_MODEL_VERSIONS.join(', ')}. If unavailable for the account, the API returns 400 with a plan-specific Stripe upgrade link.`,
       },
       { name: 'instructions', description: 'Free-text trading instructions' },
       {

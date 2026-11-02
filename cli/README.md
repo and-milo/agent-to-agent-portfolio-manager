@@ -136,13 +136,14 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
   - Unsupported or unavailable model selection returns `400 Bad Request`.
   - If the model is outside the account tier, the error includes `error.details.requiredPlan`, `error.details.upgradeUrl`, and the same plan-specific Stripe link in the error message.
   - Use `--model-version null` to clear preferred model.
-  - OpenAI canonical model ids are `gpt-5.6-terra` (the default), `o3`, `gpt-5.2-high`, `gpt-5.2-xh`, and `gpt-5.4`.
+  - Current OpenAI choices: `gpt-6.1-terra` (default, Pro/Max), `gpt-6.1-sol` (Max).
   - OpenAI ids are provider-neutral. Pass canonical ids to the CLI; Azure deployment names are server-managed and are rejected as model ids.
-  - The Anthropic canonical model id is `claude-sonnet-5.5` (Pro and Max).
+  - Claude choices: `claude-sonnet-5.5` (Pro/Max), `claude-opus-5.5` (Max).
   - `claude-opus-4.5` and `claude-opus-4.6` are retired: the CLI sends `claude-sonnet-5.5` instead (and says so on stderr), which is also what the API saves if it receives a retired id.
 - The `trenches` asset class is retired. `--allocation-json` still accepts it and sends it unchanged, but the API saves its weight as `stables` (cash), and the CLI says so on stderr. Leave it out of new allocations.
-  - Gemini canonical model ids are `gemini-3-pro` and `gemini-3.1-pro-preview`.
-  - Grok canonical model ids are `grok-4.1-fast-reasoning` and `grok-4`.
+  - Gemini is retired from selection. Legacy public IDs remain accepted for compatibility.
+  - Grok choice: `grok-4.7` (Pro/Max).
+  - Confidential Nito choices: `deepseek/deepseek-v4.1-flash:confidential` (Pro/Max), `z-ai/glm-5.3:confidential` (Max). Free has no Nito option.
 - Delisted strategies: a strategy can carry `delistingStatus` (`delisting` during a countdown to `delistAt`, then `delisted`) and a `delistingReason` code (`strategy_retired`, `underperformance_vs_benchmark`). `get-strategy` and `list-strategies` note these on stderr. `update-settings --strategy-id` with a delisting/delisted strategy (unless the account already runs it), `update-settings --is-active true` on an account that runs one, `sync-strategy` onto an account not already on it, and `deploy-arena` return `400`; `delete-strategy` returns `409` ("This strategy is being retired and cannot be deleted."). A `delete-strategy` already in progress also returns `409` ("This strategy is already being deleted."); retry later. At the deadline accounts still on it move to its fallback strategy when one is set (`delistingFallbackStrategyId` / `delistingFallbackStrategyName`; active accounts keep trading, accounts the user turned off stay off); `get-strategy` names the fallback on stderr. Without a fallback they are paused (`pausedReason: "agent_delisted"`, open positions and their stop-loss / take-profit orders stay active); `get-settings` notes that on stderr. `update-settings --strategy-id <listed strategy>` resumes the account; `update-settings --is-active false` alone turns it off on purpose (`pausedReason` cleared, and a fallback move keeps it off).
 - `update-settings`, `create-strategy`, `update-strategy`, and `sync-strategy` enforce `dataSources` entitlement.
   - Supported data-source keys are `fundingRates`, `openInterest`, `liquidationData`, and `macroData`.
@@ -251,3 +252,9 @@ npm run dev -- get-holdings
 # Rebuild after changes
 npm run build
 ```
+
+### Model reasoning policy (2026-11-01)
+
+Chat, trading decisions and position reviews use low reasoning. A proposed trade receives a separate medium-reasoning thesis call; skipped trades do not. The thesis call keeps the trade action and order levels fixed. Max includes the Pro model choices, plus GPT-6.1 Sol and Claude Opus 5.5. Legacy OpenAI settings upgrade to Terra on Pro or Sol on Max; legacy Grok settings upgrade to Grok 4.7. Explicit GPT-5.6 Terra settings upgrade to GPT-6.1 Terra. Stored legacy Opus 4.5/4.6 selections upgrade to Opus 5.5 on Max or Sonnet 5.5 on Free/Pro. Default/null settings inherit Terra; existing Sonnet selections stay Sonnet. Historical records retain the model that ran.
+
+Gemini models are retired from model selection. Existing Gemini selections upgrade to GPT-6.1 Terra on Pro or GPT-6.1 Sol on Max. GPT, Grok and Claude run through Azure. Confidential DeepSeek Flash (Pro/Max) and GLM 5.3 (Max) run through Nito and use low reasoning for thesis calls too; Free has no Nito choice. Old model ids remain valid in historical records.
