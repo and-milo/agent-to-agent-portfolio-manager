@@ -57,6 +57,7 @@ Notes:
 - Tools carry a `title` and MCP annotations: read-only tools are `readOnlyHint: true`; money-moving/irreversible tools, state-replacing tools (`sync_strategy`, `update_strategy`, `pause_order`) and the conversation writes (`create_conversation`, `send_message` — the agent can update autotrade settings or close positions when asked, after the user approves the agent's `approvalRequest` via `send_message` `approval`) are `destructiveHint: true` with a leading `⚠️` warning in the description. Only signup, `create_strategy` and `claim_quest` are additive writes. Full list in `docs/mcp.md`.
 - The server's `instructions` describe Milo as both a stock research product (analyst ratings, insider/congress/8-K events, fundamentals, earnings) and an autonomous trading-agent product (crypto on Solana + brokered US equities).
 - Synchronous research tools (`get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events`) mirror the `/api/v1/research/*` routes: market-level reads (any credential (API key or OAuth bearer, no scope needed), no userId), `readOnlyHint: true`, ticker validated (1-6 chars), `days`/`limit` clamped to 365/100, a short text summary, the same JSON serialized as a second text block (for clients that ignore `structuredContent`), and `structuredContent`. The FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) are registered only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
+- Perps and prediction-market tools (`get_perp_markets`, `get_perp_market`, `search_prediction_markets`, `get_prediction_market`) mirror the market-data research routes below: market-level reads, `readOnlyHint: true`, `openWorldHint: true` (live reads of Hyperliquid, Kalshi and Polymarket), enums validated, limits and windows clamped. Milo does not place perp or prediction-market orders.
 
 Client setup examples (OpenAI Codex + Claude Desktop): see `docs/mcp.md`.
 
@@ -532,6 +533,19 @@ Every response carries `meta.source` (what the data is and how fresh) and, where
 | `GET /api/v1/research/congress-trades`   | `ticker` (optional), `days=90`, `limit=50` | Congressional PTR disclosures for the ticker, or market-wide when omitted                |
 | `GET /api/v1/research/8k-events`         | `ticker` (required), `days=90`, `limit=50` | SEC 8-K filings with `items` (codes) and `itemSummaries` (titles)                        |
 | `GET /api/v1/research/digest`            | `ticker` (required)                     | One-call 90-day digest composing the three above (counts, notable rows, filing links)      |
+
+**Market data (live public venue data: Hyperliquid perps, Kalshi and Polymarket prediction markets):**
+
+| Route                                       | Query                                                     | Returns                                                                                                              |
+| ------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/v1/research/perp-markets`         | `sort=open_interest`, `scope=all`, `limit=20` (max 50)    | Ranked Hyperliquid perps: `funding_high` / `funding_low` (crowded longs / shorts), `open_interest`, `volume`, `movers` |
+| `GET /api/v1/research/perp-market`          | `symbol` (required), `fundingDays=7`, `candleDays=30`     | One perp with funding average + 8h history, daily candles, `alternatives`; unknown symbol → `404`                     |
+| `GET /api/v1/research/prediction-markets`   | `query` (required, 2-120 chars), `venue`, `limit=8`       | Open Kalshi + Polymarket markets with `yesPrice` (0..1), bid/ask, 24h move, volume, close time, `venue` + `id`        |
+| `GET /api/v1/research/prediction-market`    | `venue` + `id` (required), `historyDays=30` (max 90)      | One open market: odds `history` (`t` unix seconds), `siblings`, `rules`, Polymarket `topHolders`; settled → `404`     |
+
+- `scope=builder` covers builder-deployed perps on stocks, indices, commodities, pre-IPO, FX and rates; each row has `category` and `assetKind`. Funding is hourly; `fundingAprPct` annualizes it (positive = longs pay shorts). Funding boards skip markets under $1M open interest and list only the matching sign.
+- Kalshi is CFTC-regulated (the US venue); Polymarket is international and not available to US persons. Kalshi `volume` is contracts ($1 each), Polymarket `volume` is USD. Only open markets are returned.
+- Venue outages → `503 service_unavailable` (retry); a failed history leg returns the market with an empty history array. Milo does not place perp or prediction-market orders.
 
 Coverage caveats (stated in every response):
 

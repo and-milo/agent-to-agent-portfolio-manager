@@ -112,6 +112,10 @@ The CLI authenticates with an API key (`--api-key` / `MILO_API_KEY`, sent as `X-
 | `insider-buys` | Notable insider purchases across Milo's tracked universe, optionally above `--min-value-usd` |
 | `congress-trades` | Congressional PTR disclosures for a ticker, or market-wide when `--ticker` is omitted |
 | `8k-events` | SEC 8-K material-event filings for a ticker with item codes and titles |
+| `perp-markets` | Ranked Hyperliquid perps (`--sort funding_high\|funding_low\|open_interest\|volume\|movers`, `--scope all\|crypto\|builder`, `--limit` max 50) |
+| `perp-market` | One perp (`--symbol BTC` or `xyz:TSLA`): funding now/average/history, open interest, max leverage, daily candles |
+| `prediction-markets` | Open Kalshi (US-regulated) + Polymarket (international) markets on a topic (`--query`, `--venue`, `--limit` max 20) with YES probability |
+| `prediction-market` | One open market (`--venue`, `--id` from `prediction-markets`): odds history, sibling outcomes, rules, Polymarket top holders |
 | `analyst-consensus` | *(optional, licensed)* Analyst rating mix, price targets, recent grade actions |
 | `fundamentals` | *(optional, licensed)* Quarterly revenue / net income / free cash flow (12 quarters) |
 | `earnings-timeline` | *(optional, licensed)* Next scheduled report + up to 8 reported quarters with surprise % |
@@ -237,6 +241,11 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
 ./dist/milo congress-trades                      # market-wide
 ./dist/milo congress-trades --ticker NVDA --days 60
 ./dist/milo 8k-events --ticker NVDA
+# Perps + prediction markets — read-only live venue data (no user id needed)
+./dist/milo perp-markets --sort funding_low --scope crypto     # crowded shorts
+./dist/milo perp-market --symbol xyz:TSLA
+./dist/milo prediction-markets --query "fed rate october"
+./dist/milo prediction-market --venue kalshi --id KXFEDDECISION-26OCT-H0
 # Licensed (FMP-derived) — only on servers with MCP_LICENSED_RESEARCH_TOOLS=true
 ./dist/milo analyst-consensus --ticker NVDA
 ./dist/milo earnings-timeline --ticker NVDA

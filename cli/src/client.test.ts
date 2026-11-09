@@ -285,6 +285,10 @@ test('research reads hit /api/v1/research/* with the API key and only the given 
     await client.getCongressTrades();
     await client.get8kEvents({ ticker: 'NVDA', limit: '5' });
     await client.getStockNews({ ticker: 'NVDA', limit: '12' });
+    await client.getPerpMarkets({ sort: 'funding_high', limit: '5' });
+    await client.getPerpMarket({ symbol: 'xyz:TSLA' });
+    await client.searchPredictionMarkets({ query: 'fed rate', venue: 'kalshi' });
+    await client.getPredictionMarket({ venue: 'kalshi', id: 'KXFED-1', historyDays: '60' });
 
     assert.deepEqual(
       calls.map((c) => c.url),
@@ -295,6 +299,10 @@ test('research reads hit /api/v1/research/* with the API key and only the given 
         'https://partners.andmilo.com/api/v1/research/congress-trades',
         'https://partners.andmilo.com/api/v1/research/8k-events?ticker=NVDA&limit=5',
         'https://partners.andmilo.com/api/v1/research/news?ticker=NVDA&limit=12',
+        'https://partners.andmilo.com/api/v1/research/perp-markets?sort=funding_high&limit=5',
+        'https://partners.andmilo.com/api/v1/research/perp-market?symbol=xyz%3ATSLA',
+        'https://partners.andmilo.com/api/v1/research/prediction-markets?query=fed+rate&venue=kalshi',
+        'https://partners.andmilo.com/api/v1/research/prediction-market?venue=kalshi&id=KXFED-1&historyDays=60',
       ],
     );
     for (const call of calls) {

@@ -217,6 +217,45 @@ test('research command handlers forward validated flags to the client', async ()
   await assert.rejects(run('stock-news', { ticker: 'NVDA', limit: '13' }), /--limit cannot exceed 12/);
 });
 
+test('market research commands validate flags and forward them to the client', async () => {
+  const calls: Array<[string, unknown]> = [];
+  const client = new Proxy(
+    {},
+    {
+      get:
+        (_t, method: string) =>
+        (...args: unknown[]) => {
+          calls.push([method, args]);
+          return Promise.resolve({ data: [] });
+        },
+    },
+  ) as any;
+  const config = {} as any;
+  const run = (name: string, flags: Record<string, string | undefined>) =>
+    COMMANDS.find((c) => c.name === name)!.handler(flags, client, config);
+
+  await run('perp-markets', { sort: 'FUNDING_LOW', scope: 'builder', limit: '50' });
+  await run('perp-market', { symbol: ' xyz:TSLA ', 'funding-days': '30' });
+  await run('prediction-markets', { query: 'fed rate', venue: 'Kalshi' });
+  await run('prediction-market', { venue: 'polymarket', id: 'will-no-fed-rate-cuts-happen-in-2026', 'history-days': '90' });
+
+  assert.deepEqual(calls, [
+    ['getPerpMarkets', [{ sort: 'funding_low', scope: 'builder', limit: '50' }]],
+    ['getPerpMarket', [{ symbol: 'xyz:TSLA', fundingDays: '30', candleDays: undefined }]],
+    ['searchPredictionMarkets', [{ query: 'fed rate', venue: 'kalshi', limit: undefined }]],
+    ['getPredictionMarket', [{ venue: 'polymarket', id: 'will-no-fed-rate-cuts-happen-in-2026', historyDays: '90' }]],
+  ]);
+
+  await assert.rejects(run('perp-markets', { sort: 'hot' }), /--sort must be one of/);
+  await assert.rejects(run('perp-markets', { limit: '51' }), /--limit cannot exceed 50/);
+  await assert.rejects(run('perp-market', {}), /Missing required flag --symbol/);
+  await assert.rejects(run('perp-market', { symbol: 'BTC', 'candle-days': '91' }), /--candle-days cannot exceed 90/);
+  await assert.rejects(run('prediction-markets', { query: 'f' }), /--query must be 2-120 characters/);
+  await assert.rejects(run('prediction-markets', { query: 'fed', venue: 'betfair' }), /--venue must be one of/);
+  await assert.rejects(run('prediction-market', { id: 'KXFED-1' }), /Missing required flag --venue/);
+  await assert.rejects(run('prediction-market', { venue: 'kalshi', id: 'true' }), /Missing required flag --id/);
+});
+
 test('--source-family accepts registered feeds and "null", rejects anything else', () => {
   assert.equal(parseSourceFamilyFlag(undefined), undefined);
   assert.equal(parseSourceFamilyFlag('congress-ptr'), 'congress-ptr');

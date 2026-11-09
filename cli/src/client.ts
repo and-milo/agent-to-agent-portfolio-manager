@@ -351,6 +351,39 @@ export class PartnerApiClient {
     return this.request('GET', '/api/v1/research/digest', undefined, { ticker });
   }
 
+  // Market research: Hyperliquid perps + Kalshi/Polymarket prediction markets
+  getPerpMarkets(opts?: { sort?: string; scope?: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/perp-markets', undefined, {
+      sort: opts?.sort,
+      scope: opts?.scope,
+      limit: opts?.limit,
+    });
+  }
+
+  getPerpMarket(opts: { symbol: string; fundingDays?: string; candleDays?: string }) {
+    return this.request('GET', '/api/v1/research/perp-market', undefined, {
+      symbol: opts.symbol,
+      fundingDays: opts.fundingDays,
+      candleDays: opts.candleDays,
+    });
+  }
+
+  searchPredictionMarkets(opts: { query: string; venue?: string; limit?: string }) {
+    return this.request('GET', '/api/v1/research/prediction-markets', undefined, {
+      query: opts.query,
+      venue: opts.venue,
+      limit: opts.limit,
+    });
+  }
+
+  getPredictionMarket(opts: { venue: string; id: string; historyDays?: string }) {
+    return this.request('GET', '/api/v1/research/prediction-market', undefined, {
+      venue: opts.venue,
+      id: opts.id,
+      historyDays: opts.historyDays,
+    });
+  }
+
   // Licensed (FMP-derived) research — the server only mounts these routes
   // when MCP_LICENSED_RESEARCH_TOOLS=true (404 otherwise).
 

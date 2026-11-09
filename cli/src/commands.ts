@@ -248,6 +248,42 @@ export function validateResearchWindowFlags(
   validateOptionalPositiveInt('limit', limit, maxLimit);
 }
 
+// Market research (perps + prediction markets) — mirrors the partner API's
+// zod schemas for /research/perp-markets, perp-market, prediction-markets,
+// prediction-market.
+export const PERP_SORTS = ['funding_high', 'funding_low', 'open_interest', 'volume', 'movers'] as const;
+export const PERP_SCOPES = ['all', 'crypto', 'builder'] as const;
+export const PREDICTION_VENUES = ['kalshi', 'polymarket'] as const;
+
+export function parseEnumFlag<T extends string>(
+  flagName: string,
+  value: string | undefined,
+  allowed: readonly T[],
+  required: boolean,
+): T | undefined {
+  if (value === undefined || value.trim() === '' || value === 'true') {
+    if (required || value === 'true') throw new Error(`Missing required flag --${flagName}`);
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase() as T;
+  if (!allowed.includes(normalized)) {
+    throw new Error(`--${flagName} must be one of: ${allowed.join(', ')}`);
+  }
+  return normalized;
+}
+
+export function parseTextFlag(flagName: string, value: string | undefined, min: number, max: number): string {
+  // A bare flag reaches here as the parser's valueless-flag sentinel 'true'.
+  if (value === undefined || value === 'true' || value.trim() === '') {
+    throw new Error(`Missing required flag --${flagName}`);
+  }
+  const text = value.trim();
+  if (text.length < min || text.length > max) {
+    throw new Error(`--${flagName} must be ${min}-${max} characters`);
+  }
+  return text;
+}
+
 export function validateMinValueUsdFlag(value: string | undefined): void {
   if (value === undefined) return;
   const parsed = Number(value);
@@ -1478,6 +1514,81 @@ export const COMMANDS: CommandDef[] = [
         days: flags['days'],
         limit: flags['limit'],
       });
+    },
+  },
+
+  // Market research: Hyperliquid perps + Kalshi/Polymarket prediction markets.
+  // Read-only live venue data; Milo does not place these orders.
+
+  {
+    name: 'perp-markets',
+    description:
+      'Ranked Hyperliquid perpetuals board: funding (crowded longs / crowded shorts), open interest, 24h volume or 24h move; crypto or builder-deployed stock/commodity/pre-IPO perps (read-only)',
+    flags: [
+      { name: 'sort', description: `Ranking: ${PERP_SORTS.join(' | ')} (default: open_interest)` },
+      { name: 'scope', description: `${PERP_SCOPES.join(' | ')} (default: all; builder = stocks, indices, commodities, pre-IPO, FX, rates)` },
+      { name: 'limit', description: 'Max rows (default: 20, max: 50)' },
+    ],
+    handler: async (flags, client) => {
+      const sort = parseEnumFlag('sort', flags['sort'], PERP_SORTS, false);
+      const scope = parseEnumFlag('scope', flags['scope'], PERP_SCOPES, false);
+      validateOptionalPositiveInt('limit', flags['limit'], 50);
+      return client.getPerpMarkets({ sort, scope, limit: flags['limit'] });
+    },
+  },
+
+  {
+    name: 'perp-market',
+    description:
+      'One Hyperliquid perpetual (BTC, TSLA, GOLD, or a venue id like xyz:TSLA): price, funding now/average/history, open interest, max leverage, daily candles, other listings (read-only)',
+    flags: [
+      { name: 'symbol', description: 'Perp symbol or venue coin id (e.g. BTC, xyz:TSLA)', required: true },
+      { name: 'funding-days', description: 'Funding history window in days (default: 7, max: 30)' },
+      { name: 'candle-days', description: 'Daily candles window in days (default: 30, max: 90)' },
+    ],
+    handler: async (flags, client) => {
+      const symbol = parseTextFlag('symbol', flags['symbol'], 1, 32);
+      validateOptionalPositiveInt('funding-days', flags['funding-days'], 30);
+      validateOptionalPositiveInt('candle-days', flags['candle-days'], 90);
+      return client.getPerpMarket({
+        symbol,
+        fundingDays: flags['funding-days'],
+        candleDays: flags['candle-days'],
+      });
+    },
+  },
+
+  {
+    name: 'prediction-markets',
+    description:
+      'Search open prediction markets on Kalshi (US-regulated) and Polymarket (international, not for US persons) with YES implied probability, 24h move, volume, close time (read-only)',
+    flags: [
+      { name: 'query', description: 'Topic, 2-120 chars (e.g. "fed rate october")', required: true },
+      { name: 'venue', description: `${PREDICTION_VENUES.join(' | ')} (default: both)` },
+      { name: 'limit', description: 'Max markets (default: 8, max: 20)' },
+    ],
+    handler: async (flags, client) => {
+      const query = parseTextFlag('query', flags['query'], 2, 120);
+      const venue = parseEnumFlag('venue', flags['venue'], PREDICTION_VENUES, false);
+      validateOptionalPositiveInt('limit', flags['limit'], 20);
+      return client.searchPredictionMarkets({ query, venue, limit: flags['limit'] });
+    },
+  },
+
+  {
+    name: 'prediction-market',
+    description:
+      'One open prediction market by venue + id (from prediction-markets): odds history, sibling outcomes, resolution rules, Polymarket top holders; settled markets return 404 (read-only)',
+    flags: [
+      { name: 'venue', description: PREDICTION_VENUES.join(' | '), required: true },
+      { name: 'id', description: 'Kalshi market ticker or Polymarket market slug', required: true },
+      { name: 'history-days', description: 'Odds history window in days (default: 30, max: 90)' },
+    ],
+    handler: async (flags, client) => {
+      const venue = parseEnumFlag('venue', flags['venue'], PREDICTION_VENUES, true)!;
+      const id = parseTextFlag('id', flags['id'], 3, 200);
+      validateOptionalPositiveInt('history-days', flags['history-days'], 90);
+      return client.getPredictionMarket({ venue, id, historyDays: flags['history-days'] });
     },
   },
 
