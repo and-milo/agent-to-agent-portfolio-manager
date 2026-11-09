@@ -110,6 +110,7 @@ That's it — Milo is now managing your portfolio. Read on for the full feature 
 | **Send tokens to another wallet** | "Wallet Actions" (under Complete API Reference) |
 | **Check positions, holdings, or PnL** | "Recipe 4: Fetch your positions" and "Portfolio" (under Complete API Reference) |
 | **Chat with Milo's AI agents** | "Recipe 3: Talk with Milo" / "Recipe 6: Ask about a token" and "Conversations" (under Complete API Reference) |
+| **Check perp funding / open interest or prediction-market odds** | "Perpetuals & Prediction Markets (synchronous)" |
 | **Look up insider / congress / 8-K disclosures for a stock** | "Stock Research (synchronous)" |
 | **Understand the full onboarding flow** | "Quick Start" and "First Boot Protocol" |
 | **Set up a recurring portfolio check-in** | "Heartbeat Protocol" |
@@ -124,6 +125,7 @@ That's it — Milo is now managing your portfolio. Read on for the full feature 
 - **Quests & Bones** — Complete quests (event-driven tasks like trades, signups) to earn bones (reward points). Check quests regularly and claim bones for completed quests.
 - **AI conversations** — Chat with Milo's market analyst, auto-trader, or game agent. Async processing with polling.
 - **Portfolio data** — Holdings, transactions, executed transactions, diary logs.
+- **Perps & prediction markets (synchronous)** — `GET /api/v1/research/perp-markets`, `perp-market`, `prediction-markets`, `prediction-market`: read-only Hyperliquid perps data (funding, open interest, leverage, incl. stock/commodity perps) and Kalshi/Polymarket odds. Any credential, no userId. Milo does not place these orders. See "Perpetuals & Prediction Markets (synchronous)".
 - **Stock research (synchronous)** — `GET /api/v1/research/*`: SEC Form 4 insider purchases, congressional PTR trades, SEC 8-K events and a one-call digest per ticker. any credential (API key or OAuth bearer, no scope needed), no userId. See "Stock Research (synchronous)".
 
 ## Quick Start
@@ -172,7 +174,7 @@ For sessioned requests after initialize, send `Mcp-Session-Id`.
 
 MCP tools carry a `title` and MCP annotations. Read-only tools are `readOnlyHint: true`. Money-moving or irreversible tools (`close_position`, `close_all_positions`, `create_order`, `activate_order`, `delete_order`, `send_tokens`, `update_autotrade_settings`, `update_account_autotrade_settings`, `delete_strategy`, `deploy_arena_strategy`, `withdraw_arena_strategy`), state-replacing tools (`sync_strategy` replaces the live account's allocation/instructions, `update_strategy` overwrites saved fields, `pause_order` can disable an active stop-loss) and the conversation writes (`create_conversation`, `send_message` — the answering agent can update autotrade settings or close positions when the message asks for it, after the user approves the agent's `approvalRequest` via `send_message` `approval`) are `destructiveHint: true` with a leading ⚠️ warning in their description — confirm with the user before calling them. Only `prepare_signup_message`, `signup`, `create_strategy` and `claim_quest` are additive (`destructiveHint: false`) writes. The server's `instructions` describe Milo as both a stock research product (analyst ratings, insider/congress/8-K events, fundamentals, earnings) and an autonomous trading-agent product (crypto on Solana + brokered US equities); see `docs/mcp.md`.
 
-Synchronous research tools — `get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events` — mirror `GET /api/v1/research/*` (any credential (API key or OAuth bearer, no scope needed), no userId; `readOnlyHint: true`; ticker validated, `days`/`limit` clamped; a text summary, the same JSON serialized as a second text block for clients that ignore `structuredContent`, and `structuredContent`). FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) appear only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off).
+Synchronous research tools — `get_stock_research_digest`, `get_insider_transactions`, `get_recent_insider_buys`, `get_congress_trades`, `get_8k_events` — mirror `GET /api/v1/research/*` (any credential (API key or OAuth bearer, no scope needed), no userId; `readOnlyHint: true`; ticker validated, `days`/`limit` clamped; a text summary, the same JSON serialized as a second text block for clients that ignore `structuredContent`, and `structuredContent`). FMP-derived tools (`get_analyst_consensus`, `get_stock_fundamentals`, `get_earnings_timeline`, `get_stock_news`, `get_peer_comparison`) appear only when the server runs with `MCP_LICENSED_RESEARCH_TOOLS=true` (default off). Perps and prediction-market tools — `get_perp_markets`, `get_perp_market`, `search_prediction_markets`, `get_prediction_market` — mirror the matching research routes; they are `readOnlyHint: true` with `openWorldHint: true` (live reads of Hyperliquid, Kalshi and Polymarket).
 
 ## Wallet & Deposits
 
@@ -1491,6 +1493,21 @@ Read-only, market-level reads under `GET /api/v1/research/*` — any credential 
 
 ```bash
 curl "{{BASE_URL}}/api/v1/research/digest?ticker=NVDA" \
+  -H "X-API-Key: $API_KEY"
+```
+
+## Perpetuals & Prediction Markets (synchronous)
+
+Read-only, market-level reads of live public venue data — any credential (API key or OAuth bearer, no scope needed), no `userId`/`walletId`, same 60 requests/min limit as the other research routes. Every response carries `meta.source` and `meta.asOf`. Milo shows this data but does **not** place perp or prediction-market orders.
+
+- `GET /api/v1/research/perp-markets?sort=open_interest&scope=all&limit=20` — ranked Hyperliquid perps. `sort`: `funding_high` (longs paying the most = crowded longs), `funding_low` (shorts paying the most = crowded shorts), `open_interest`, `volume` (24h), `movers` (largest absolute 24h move). `scope`: `all`, `crypto`, or `builder` (builder-deployed perps on stocks, indices, commodities, pre-IPO, FX and rates, e.g. `xyz:TSLA`, `xyz:GOLD`, `io:ANTH`). `limit` max 50. Each row: `coin`, `symbol`, `dex`, `category`, `assetKind`, `markPx`, `change24hPct`, `fundingRateHourly`, `fundingAprPct` (positive = longs pay shorts), `openInterestUsd`, `volume24hUsd`, `maxLeverage`, `onlyIsolated`. Funding boards skip markets under $1M open interest and list only the matching funding sign (an empty `data` means no market currently has that sign).
+- `GET /api/v1/research/perp-market?symbol=BTC&fundingDays=7&candleDays=30` — one perp by symbol (`BTC`, `TSLA`, `GOLD`) or venue id (`xyz:TSLA`): the row fields above plus `avgFundingAprPct`, `fundingHistory` (8h buckets, `t` in ms), daily `candles` (`time` in ms) and `alternatives` (other listings of the same symbol). `fundingDays` max 30, `candleDays` max 90. Unknown symbol → `404 not_found`.
+- `GET /api/v1/research/prediction-markets?query=fed%20rate&venue=kalshi&limit=8` — open markets on a topic from Kalshi (CFTC-regulated, the US venue) and Polymarket (international; not available to US persons), venues interleaved; `venue` optional, `limit` max 20, `query` 2-120 chars. Each market: `venue`, `id`, `eventTitle`, `outcome`, `question`, `yesPrice` (YES implied probability 0..1), `yesBid`/`yesAsk`, `change24h` (absolute), `volume` + `volumeUnit` (`contracts` on Kalshi, `usd` on Polymarket), `closeTime`, `url`.
+- `GET /api/v1/research/prediction-market?venue=kalshi&id=KXFEDDECISION-26OCT-H0&historyDays=30` — one open market by `venue` + `id` (Kalshi market ticker or Polymarket market slug from the search): the fields above plus `rules`, `siblings` (other outcomes of the same event), `history` (`t` in unix **seconds**, `p` = YES 0..1) and `topHolders` (Polymarket only). Settled, closed or unknown markets → `404 not_found`. `historyDays` max 90.
+- Venue outages return `503 service_unavailable` (retryable); a failed history leg returns the market with an empty `fundingHistory` / `candles` / `history` rather than failing.
+
+```bash
+curl "{{BASE_URL}}/api/v1/research/prediction-markets?query=fed%20rate" \
   -H "X-API-Key: $API_KEY"
 ```
 
