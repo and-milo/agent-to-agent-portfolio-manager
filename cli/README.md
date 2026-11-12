@@ -180,7 +180,9 @@ The five *optional, licensed* commands are FMP-derived and only work against a s
 ./dist/milo create-order \
   --token-address So11111111111111111111111111111111 \
   --type buy \
-  --payload-json '{"type":"buy","amount":{"type":"absolute_usd","amount":50},"trigger":{"type":"absolute","trigger":"price","operator":"lte","value":100}}'
+  --payload-json '{"type":"buy","amount":{"type":"absolute_usd","amount":50},"trigger":{"type":"absolute","trigger":"price","operator":"lte","value":100},"execution":{"slippagePercentage":3}}'
+# execution accepts slippagePercentage, priorityFee and tokenMints; the Milo
+# platform fee is set by Milo (execution.platformFeeBps is ignored).
 
 # Auto-trade settings
 ./dist/milo get-settings

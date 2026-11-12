@@ -693,7 +693,7 @@ export const COMMANDS: CommandDef[] = [
       {
         name: 'payload-json',
         description:
-          'Order payload JSON (amount, trigger, execution); schema errors can include error.details.validationIssues',
+          'Order payload JSON (amount, trigger, execution: slippagePercentage, priorityFee, tokenMints); the Milo platform fee is set by Milo, so execution.platformFeeBps is ignored; schema errors can include error.details.validationIssues',
         required: true,
       },
       { name: 'status', description: 'active or draft (default: active)' },

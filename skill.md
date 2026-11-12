@@ -1128,7 +1128,9 @@ Market orders require `expiresAt`, and it must be within 120 minutes of the requ
 Execution options (all optional):
 - `slippagePercentage` - Max slippage (0-100)
 - `priorityFee` - Priority fee in SOL lamports
-- `platformFeeBps` - Platform fee override in basis points
+- `tokenMints` - `{ "inputMint", "outputMint" }` explicit swap mints (defaults apply when omitted)
+
+The Milo platform fee is set by Milo and cannot be overridden: a `platformFeeBps` field in `execution` is ignored (the order is still created and is charged the standard fee), and order responses do not include it.
 
 **Linking to a thesis:** Pass `positionThesisId` (UUID) in the body to attach the order (and its TP/SL dependants) to a position thesis.
 

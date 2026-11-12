@@ -937,6 +937,15 @@ curl -X POST https://partners.andmilo.com/api/v1/wallets/{walletId}/orders \
 | `absolute` | `gte`, `lte` | Trigger at absolute price |
 | `relative` | `rise`, `drop` | Trigger on % change from entry |
 
+**Execution options (`payload.execution`, all optional):**
+| Field | Type | Description |
+|-------|------|-------------|
+| `slippagePercentage` | number | Max slippage (0-100), default 3 |
+| `priorityFee` | number | Max priority fee in SOL lamports |
+| `tokenMints` | object | `{ inputMint, outputMint }` explicit swap mints; defaults apply when omitted |
+
+The Milo platform fee is set by Milo and cannot be overridden. A `platformFeeBps` field in `execution` is ignored (the order is still created and charged the standard fee), and order responses do not include it. The same applies to the MCP `create_order` tool.
+
 Market order: `{ "type": "absolute", "trigger": "price", "operator": "gte", "value": 0 }`
 Market orders require `expiresAt`, and it must be within 120 minutes of the request time.
 Active market orders are checked before creation to confirm the current DFlow `/order` route guarantees output close enough to the USD value of the input and output tokens, regardless of mint. If the route cannot be verified, or it appears to pass through thin liquidity, the API returns `400 bad_request` and does not create the order. Try a smaller amount, wait and retry, or choose a more liquid token or pair.
