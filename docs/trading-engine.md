@@ -208,7 +208,8 @@ Fine-tune how your order executes on-chain. All fields are optional — sensible
 | -------------------- | ------ | ---------- | ------------------------------------------------------- |
 | `slippagePercentage` | number | 3%         | Max allowable slippage (0-100)                          |
 | `priorityFee`        | number | auto       | Priority fee in SOL lamports for faster block inclusion |
-| `platformFeeBps`     | number | 90-100 bps | Milo platform fee in basis points                       |
+
+The Milo platform fee (90-100 bps) is set by Milo and is not an execution option: a `platformFeeBps` sent in `execution` is ignored and the standard fee is charged.
 
 Higher slippage tolerance increases fill probability for volatile tokens. Higher priority fees get your transaction included faster by Solana validators.
 
